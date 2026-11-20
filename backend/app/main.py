@@ -23,7 +23,8 @@ from .events import channel, emit
 from .seed import PATIENT_ID, reset_and_seed
 
 S = get_settings()
-FILLER = {"devanagari": "जी, एक पल, मैं देख रही हूँ। ", "latin": "Ji, ek pal, main dekh rahi hoon. "}
+FILLER = {"devanagari": "जी, एक पल, मैं देख रही हूँ। ", "hinglish": "Ji, ek pal, main dekh rahi hoon. ",
+          "english": "Sure, one moment please. "}
 
 
 async def reminder_loop():
@@ -167,7 +168,8 @@ async def agora_llm(session_id: str, request: Request):
         yield _chunk("", role=True)
         done, _ = await asyncio.wait({task}, timeout=1.6)
         if not done:  # mask tool latency with a natural filler so the caller is never in silence
-            yield _chunk(FILLER.get(S.response_script, FILLER["latin"]))
+            from .safety import reply_language
+            yield _chunk(FILLER[reply_language(text)])
         reply = await task
         # stream sentence-ish pieces so TTS can start early
         buf = ""

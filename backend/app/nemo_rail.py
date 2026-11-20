@@ -21,6 +21,22 @@ REPLIES = {
 }
 
 
+REPLIES_EN = {
+    "medication_change": "Only your doctor or pharmacist can decide to change, stop or double a medicine. "
+                         "I can book a doctor's appointment for you or show your prescription on screen.",
+    "diagnosis": "I can't give a diagnosis. I can explain what your reports say and prepare questions for your doctor. "
+                 "Shall I explain your latest report?",
+    "other_patient": "I can only access your own health records. I can't show anyone else's information.",
+    "jailbreak": "I can't change my safety rules. Nothing is booked, shared or ordered without your clear approval. "
+                 "How can I help you?",
+}
+
+
+def reply_for(key: str, user_text: str) -> str:
+    from .safety import reply_language
+    return REPLIES_EN[key] if reply_language(user_text) == "english" else REPLIES[key]
+
+
 def _get():
     global _rails, _ok
     if _rails is None and _ok:

@@ -34,8 +34,17 @@ def _auth_header() -> dict:
 def tts_block() -> dict:
     if S.agora_tts_json.strip():
         return json.loads(S.agora_tts_json)
-    return {"vendor": "murf", "params": {"api_key": S.murf_api_key, "voice_id": S.murf_voice_id,
-                                         "model": S.murf_model, "locale": S.murf_locale, "style": "Conversational"}}
+    # Matches Agora's documented Murf block (docs.agora.io/en/ai/models/tts/murf): camelCase voiceId
+    return {"vendor": "murf", "params": {
+        "api_key": S.murf_api_key,
+        "base_url": "wss://global.api.murf.ai/v1/speech/stream-input",
+        "voiceId": S.murf_voice_id,          # hi-IN-shweta (female, Hindi, Falcon)
+        "locale": S.murf_locale,
+        "model": S.murf_model,               # FALCON
+        "sample_rate": 24000,
+        "rate": 0,
+        "pitch": 0,
+    }}
 
 
 def join_body(channel: str, session_id: str) -> dict:

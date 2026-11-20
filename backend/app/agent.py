@@ -108,7 +108,7 @@ async def guard_input(state: State, config) -> dict:
         if key:
             activity(pid, sid, f"NeMo Guardrails input rail: {key.replace('_', ' ')}", "failed",
                      f"blocked before the LLM · {ms:.0f} ms", "nemo_guardrails")
-            return {"emergency": True, "messages": [AIMessage(content=nemo_rail.REPLIES[key])]}
+            return {"emergency": True, "messages": [AIMessage(content=nemo_rail.reply_for(key, text))]}
     return {"emergency": False}
 
 
@@ -130,7 +130,14 @@ def _window(msgs: list[AnyMessage], n: int = 40) -> list[AnyMessage]:
 async def call_agent(state: State, config) -> dict:
     _, sid, lang = _ctx(config)
     t0 = time.perf_counter()
-    resp = await llm.ainvoke([SystemMessage(content=system_prompt(lang))] + _window(state["messages"]), config)
+    last_user = next((str(m.content) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)
+                      and not str(m.content).startswith("[App event")), "")
+    rl = safety.reply_language(last_user)
+    lang_rule = {"english": "The patient's latest message is in ENGLISH. Reply ONLY in natural English (Indian English is fine).",
+                 "devanagari": "The patient's latest message is in Hindi (Devanagari). Reply ONLY in Devanagari Hindi; keep test names and numbers in English.",
+                 "hinglish": "The patient's latest message is in Roman Hinglish. Reply ONLY in Roman Hinglish (Hindi in Latin script)."}[rl]
+    msgs = [SystemMessage(content=system_prompt(lang))] + _window(state["messages"]) +            [SystemMessage(content=f"LANGUAGE FOR THIS REPLY: {lang_rule} Use feminine first person if Hindi.")]
+    resp = await llm.ainvoke(msgs, config)
     calls = [c["name"] for c in getattr(resp, "tool_calls", []) or []]
     print(f"LLM {sid} {time.perf_counter() - t0:.2f}s -> {calls or 'answer'}", flush=True)
     return {"messages": [resp]}

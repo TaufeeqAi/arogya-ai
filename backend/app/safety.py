@@ -49,8 +49,20 @@ def is_emergency(text: str) -> bool:
     return any(re.search(p, t) for p in EMERGENCY_PATTERNS)
 
 
-_EN_WORDS = {"i", "my", "me", "is", "am", "the", "have", "having", "what", "can", "please", "chest", "pain", "help"}
-_HI_WORDS = {"hai", "ho", "raha", "rahi", "mujhe", "mera", "meri", "mere", "kya", "nahi", "mein", "kar", "aa", "gaya"}
+_EN_WORDS = {"i", "my", "me", "is", "am", "are", "the", "a", "an", "have", "having", "what", "can", "could", "please",
+             "chest", "pain", "help", "you", "explain", "show", "book", "report", "last", "latest", "with", "for",
+             "and", "to", "of", "it", "do", "does", "should", "when", "how", "which", "previous", "compare", "doctor",
+             "appointment", "reminder", "medicine", "medicines", "share", "yes", "set", "want", "need", "about"}
+_HI_WORDS = {"hai", "ho", "raha", "rahi", "mujhe", "mera", "meri", "mere", "kya", "nahi", "mein", "kar", "aa", "gaya",
+             "karo", "do", "dikhao", "samjhao", "chahiye", "wala", "wali", "haan", "ji", "aur", "se", "ka", "ki", "ke",
+             "ko", "bhi", "laga", "batao", "kaise", "kab", "kitna", "theek", "dawai", "dawaiyon", "pichhli"}
+
+
+def reply_language(text: str) -> str:
+    """Deterministic per-turn language choice: 'english' | 'devanagari' | 'hinglish'."""
+    if re.search(r"[ऀ-ॿ]", text):
+        return "devanagari"
+    return "english" if is_english(text) else "hinglish"
 
 
 def is_english(text: str) -> bool:
