@@ -8,13 +8,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as aioredis
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from . import actions, agora, memory, storage
+from . import actions, agora, ingest, memory, storage
 from .actions import ActionError, fmt_dt
 from .agent import note_external_decision, run_turn
 from .config import get_settings
@@ -270,6 +270,29 @@ def document_file(doc_id: str):
                     headers={"Content-Disposition": f'inline; filename="{d.id}.pdf"'})
 
 
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...), session_id: str = Form("")):
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(413, "File too large")
+    mime = file.content_type or "application/pdf"
+    if not (mime == "application/pdf" or mime.startswith("image/")):
+        raise HTTPException(415, "PDF or image only")
+    d = ingest.create_upload(PATIENT_ID, file.filename or "document", data, mime)
+    if d.status == "extracting":
+        ingest.spawn(PATIENT_ID, session_id, d.id)
+    return {"document_id": d.id, "status": d.status, "duplicate": d.status != "extracting"}
+
+
+class ConfirmIn(BaseModel):
+    session_id: str = ""
+
+
+@app.post("/api/documents/{doc_id}/confirm")
+def confirm_document(doc_id: str, body: ConfirmIn):
+    return ingest.confirm(PATIENT_ID, body.session_id, doc_id)
+
+
 @app.get("/api/comparison")
 def comparison():
     return memory.compare(PATIENT_ID)
@@ -356,6 +379,26 @@ def demo_reset():
 def demo_conflict(on: bool = True):
     actions._r.set(actions.CONFLICT_KEY, "1") if on else actions._r.delete(actions.CONFLICT_KEY)
     return {"conflict_next_booking": on}
+
+
+# ------------------------------------------------------------------ serve the exported web app (PWA) on the same origin
+from pathlib import Path as _P
+from fastapi.responses import FileResponse as _F
+
+_DIST = _P(__file__).resolve().parents[2] / "app" / "dist"
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa(full_path: str):
+    if full_path.startswith(("api/", "agora/")):
+        raise HTTPException(404)
+    f = (_DIST / full_path).resolve()
+    if full_path and f.is_file() and _DIST.resolve() in f.parents:
+        return _F(f)
+    idx = _DIST / "index.html"
+    if idx.exists():
+        return _F(idx, headers={"Cache-Control": "no-cache"})
+    return JSONResponse({"error": "web app not built; run: cd app && npx expo export -p web"}, status_code=404)
 
 
 @app.post("/api/demo/medication-reminder-now")

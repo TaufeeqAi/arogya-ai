@@ -33,7 +33,8 @@ def obs_dict(o: Observation, doc: Document | None = None) -> dict:
 def lab_documents(patient_id: str) -> list[Document]:
     with session() as s:
         return list(s.scalars(select(Document).where(Document.patient_id == patient_id,
-                                                     Document.doc_type == "lab_report")
+                                                     Document.doc_type == "lab_report",
+                                                     Document.status == "processed")
                               .order_by(Document.issued_on.desc())))
 
 
@@ -51,7 +52,8 @@ def compare(patient_id: str, test_codes: list[str] | None = None) -> dict:
     """Deterministic latest-vs-previous comparison. Only identical test code + unit are compared."""
     with session() as s:
         q = select(Observation, Document).join(Document, Document.id == Observation.document_id).where(
-            Observation.patient_id == patient_id).order_by(Observation.observed_on)
+            Observation.patient_id == patient_id,
+            Observation.validation_status.in_(("validated", "patient_confirmed"))).order_by(Observation.observed_on)
         rows = s.execute(q).all()
     series: dict[str, list] = {}
     for o, d in rows:

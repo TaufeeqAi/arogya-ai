@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "Aarogya",
+    "slug": "aarogya",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,10 +16,20 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "in.aarogya.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "Aarogya \u2014 AI Health Companion",
+      "shortName": "Aarogya",
+      "themeColor": "#0F766E",
+      "backgroundColor": "#F6F3EE",
+      "lang": "hi",
+      "display": "standalone",
+      "orientation": "portrait"
     }
   }
 }

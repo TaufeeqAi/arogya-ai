@@ -1,6 +1,7 @@
 """LangGraph orchestrator: deterministic input guard -> tool-calling agent loop -> deterministic output guard."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Annotated, TypedDict
 
@@ -31,6 +32,9 @@ def system_prompt(language_hint: str) -> str:
     return f"""You are Aarogya, a warm, patient-controlled personal health companion for Indian families.
 You are speaking on a real-time VOICE call. Today is {now.strftime('%A, %d %B %Y')}, time {now.strftime('%I:%M %p')} IST.
 The signed-in patient is Sunita Sharma (patient scope is enforced by the server).
+
+PERSONA: You are female. Always use feminine first-person grammar in Hindi: "main kar sakti hoon",
+"dekh rahi hoon", "maine dikha di hai" (मैं कर सकती हूँ, देख रही हूँ). Address the patient respectfully as "Sunita ji".
 
 LANGUAGE
 - Reply in the language the patient uses: Hindi/Hinglish if they speak Hindi or Hinglish, English if English.
@@ -115,8 +119,11 @@ def _window(msgs: list[AnyMessage], n: int = 40) -> list[AnyMessage]:
 
 
 async def call_agent(state: State, config) -> dict:
-    _, _, lang = _ctx(config)
+    _, sid, lang = _ctx(config)
+    t0 = time.perf_counter()
     resp = await llm.ainvoke([SystemMessage(content=system_prompt(lang))] + _window(state["messages"]), config)
+    calls = [c["name"] for c in getattr(resp, "tool_calls", []) or []]
+    print(f"LLM {sid} {time.perf_counter() - t0:.2f}s -> {calls or 'answer'}", flush=True)
     return {"messages": [resp]}
 
 
