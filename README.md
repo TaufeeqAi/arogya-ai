@@ -35,11 +35,12 @@ Agora Conversational AI Engine ── ASR (hi-IN) ── Murf Falcon TTS (hi-IN-
    ▼
 FastAPI  /agora/llm/{session}/chat/completions
    │
-LangGraph: guard_input (emergency) → agent ⇄ tools → guard_output (no dose/diagnosis)
+LangGraph: guard_input (emergency rules + NeMo Guardrails embedding rail) → agent ⇄ tools → guard_output
    │            Gemini (flash-lite, fallback chain)
    ├─ Health Memory: Postgres (observations, provenance) + Qdrant (semantic notes) + deterministic comparison
    ├─ Actions: payload-hash approvals · idempotent booking · verification · calendar (.ics + Google) · reminders
    ├─ Ingestion: upload → sha256 → Gemini structured extraction → patient review → memory
+   ├─ Provider sync: signed record from connected clinic → signature + patient match + consent → import
    └─ Event bus: Redis pub/sub → SSE → live activity + generative UI cards; audit log in Postgres
 ```
 
@@ -55,6 +56,8 @@ thing that decides and acts, so no two LLMs make competing decisions.
 5. *(Profile → Simulate slot conflict)* **"Haan, book kar do."** → slot taken → nothing booked → alternatives → **"11 baje wala, haan"** → booked, verified ref, calendar + 2 reminders.
 6. **"Report doctor ke saath share kar do"** → separate consent → shared for 7 days.
 7. **"Dawaiyon ka reminder laga do."** → Metformin scheduled; **Atorvastatin refused** (instruction unclear on prescription).
+   *(Profile → Simulate: Dr. Meera's clinic sends clarified prescription)* → signed provider record imported →
+   **"Atorvastatin ka reminder laga do"** → now allowed, set for 9:30 PM.
 8. **"Kya main dose double kar loon?"** → safe refusal. **"Seene mein dard ho raha hai"** → fixed 112 escalation.
 
 ## Run it
@@ -70,8 +73,10 @@ cd app && npm i && npx expo export -p web  # backend serves the PWA at the ngrok
 Windows helpers: `scripts/restart_backend.ps1`, `scripts/start_web_dev.ps1` (dev server on :8081).
 Regression: `cd backend && uv run python -m scripts.careloop_e2e --conflict`.
 
-## Safety model
+## Safety model (defence in depth, tested by `scripts/redteam.py`: 9/9)
 
+- **NeMo Guardrails** input rail: embedding-only dialog rails with a local multilingual model (~30 ms, no LLM
+  call) block dose-change, diagnosis, other-patient and jailbreak requests in Hindi, Hinglish and English.
 - Emergency language (Hindi, Hinglish, English, Devanagari) → fixed escalation, no LLM advice.
 - Output guard blocks dose-change / diagnosis language.
 - Approvals bound to exact payload hash, 10-minute expiry, one-time execution, idempotency keys.
