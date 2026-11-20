@@ -360,6 +360,28 @@ function ExtractionReview({ p }: { p: any }) {
   );
 }
 
+function ProviderRecord({ p }: { p: any }) {
+  return (
+    <Card tone="ok">
+      <View style={st.row}>
+        <Text style={font.tiny}>NEW RECORD FROM YOUR DOCTOR</Text>
+        <Pill text="Provider verified" tone="ok" />
+      </View>
+      <Text style={[font.h3, { marginTop: 4 }]}>{p.title}</Text>
+      <Text style={font.small}>{p.provider} · {fmtDate(p.date)}</Text>
+      {p.changes.map((c: string) => (
+        <View key={c} style={[st.banner, { backgroundColor: C.okSoft, marginVertical: 6 }]}>
+          <Text style={{ color: C.ok, fontWeight: '700' }}>{c}</Text>
+        </View>
+      ))}
+      <View style={st.row}>
+        <SourceChip documentId={p.document_id} title="View signed prescription" />
+        <Text style={[font.tiny, { fontFamily: 'monospace' }]}>sig {p.signature}…</Text>
+      </View>
+    </Card>
+  );
+}
+
 function Emergency() {
   return (
     <Card tone="danger" style={{ backgroundColor: C.dangerSoft }}>
@@ -387,6 +409,7 @@ export function GenUI({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
       case 'order_confirmation': return <Order p={p} />;
       case 'emergency': return <Emergency />;
       case 'extraction_review': return <ExtractionReview p={p} />;
+      case 'provider_record': return <ProviderRecord p={p} />;
       default: return null; // unknown component: ignored safely
     }
   } catch {

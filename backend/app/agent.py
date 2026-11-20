@@ -39,6 +39,7 @@ PERSONA: You are female. Always use feminine first-person grammar in Hindi: "mai
 LANGUAGE
 - Reply in the language the patient uses: Hindi/Hinglish if they speak Hindi or Hinglish, English if English.
 - {SCRIPT_RULE.get(S.response_script, SCRIPT_RULE['devanagari'])}
+- Times: say them the way people speak, e.g. "raat 9:30 baje", "subah 11 baje" (रात 9:30 बजे).
 - Voice style: 1-3 short spoken sentences per turn (max ~45 words). No markdown, no bullet lists, no emojis,
   no URLs, no IDs. Say dates naturally ("18 November"). The screen shows the details as cards, so say
   "screen par dikha diya hai" instead of reading long lists.
@@ -99,7 +100,7 @@ def guard_input(state: State, config) -> dict:
         activity(pid, sid, "Safety policy: emergency escalation", "failed", "Fixed escalation response; no AI advice",
                  "safety_guard")
         emit(pid, sid, "ui", {"component": "emergency", "version": 1, "props": {"call": "112"}})
-        return {"emergency": True, "messages": [AIMessage(content=safety.emergency_reply(S.response_script))]}
+        return {"emergency": True, "messages": [AIMessage(content=safety.emergency_reply(S.response_script, str(last.content)))]}
     return {"emergency": False}
 
 

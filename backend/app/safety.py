@@ -5,14 +5,21 @@ import re
 
 EMERGENCY_PATTERNS = [
     r"chest.{0,12}pain", r"pain.{0,12}chest", r"seen[ae]?.{0,25}dard", r"dard.{0,15}seen", r"chhat[ie].{0,25}dard",
-    r"सीने.{0,25}दर्द", r"छाती.{0,25}दर्द", r"दिल.{0,15}दर्द", r"heart attack", r"dil.{0,15}dard",
+    r"सीने.{0,25}दर्द", r"छाती.{0,25}दर्द", r"दिल.{0,15}दर्द", r"dil.{0,15}dard",
+    r"(having|ho raha|aa raha|pada|hua|feel like).{0,20}heart attack", r"heart attack.{0,20}(ho raha|aa raha|right now|now)",
     r"can'?t breathe", r"saa?ns.{0,20}(nahi|nahin|lene|phool|takleef|dikkat)", r"सांस.{0,20}(नहीं|लेने|फूल|तकलीफ)",
     r"breathless", r"short(ness)? of breath",
     r"unconscious", r"behosh", r"बेहोश", r"stroke", r"lakwa", r"लकवा", r"face drooping",
     r"suicid", r"khud ?kushi", r"आत्महत्या", r"mar jaana chahti", r"kill myself",
     r"heavy bleeding", r"bahut khoon", r"बहुत खून", r"seizure", r"daura pad", r"दौरा",
-    r"overdose", r"zyada goli kha li", r"ज़्यादा गोली",
+    r"overdose", r"zyada goli", r"ज़्यादा गोली", r"([4-9]|\d{2,})\s*(goli|goliyan|goliyaan|tablets|pills)",
+    r"(goli|goliyan|goliyaan|tablets|pills).{0,25}(ek saath|ek sath|at once|together|kha li|kha liye|le li)",
+    r"too many (pills|tablets)", r"zeh(e)?r", r"poison", r"ज़हर", r"गोलियां.{0,20}(खा ली|एक साथ)",
 ]
+EMERGENCY_REPLY_EN = (
+    "This could be an emergency. Please call 112 right now or go to the nearest emergency hospital. "
+    "If someone is with you, ask them to help you immediately."
+)
 EMERGENCY_REPLY_HI = (
     "Yeh emergency ho sakti hai. Kripya abhi turant 112 par call karein ya sabse nazdeeki emergency hospital jaayein. "
     "Agar koi aapke paas hai to unhe abhi bulaiye. Main aapke emergency contact ko bhi suchit kar sakti hoon."
@@ -42,7 +49,20 @@ def is_emergency(text: str) -> bool:
     return any(re.search(p, t) for p in EMERGENCY_PATTERNS)
 
 
-def emergency_reply(script: str) -> str:
+_EN_WORDS = {"i", "my", "me", "is", "am", "the", "have", "having", "what", "can", "please", "chest", "pain", "help"}
+_HI_WORDS = {"hai", "ho", "raha", "rahi", "mujhe", "mera", "meri", "mere", "kya", "nahi", "mein", "kar", "aa", "gaya"}
+
+
+def is_english(text: str) -> bool:
+    if re.search(r"[ऀ-ॿ]", text):
+        return False
+    toks = set(re.findall(r"[a-z']+", text.lower()))
+    return len(toks & _EN_WORDS) > len(toks & _HI_WORDS)
+
+
+def emergency_reply(script: str, user_text: str = "") -> str:
+    if user_text and is_english(user_text):
+        return EMERGENCY_REPLY_EN
     return EMERGENCY_REPLY_DEV if script == "devanagari" else EMERGENCY_REPLY_HI
 
 

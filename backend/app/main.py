@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from . import actions, agora, ingest, memory, storage
+from . import actions, agora, ingest, memory, provider, storage
 from .actions import ActionError, fmt_dt
 from .agent import note_external_decision, run_turn
 from .config import get_settings
@@ -399,6 +399,11 @@ def spa(full_path: str):
     if idx.exists():
         return _F(idx, headers={"Cache-Control": "no-cache"})
     return JSONResponse({"error": "web app not built; run: cd app && npx expo export -p web"}, status_code=404)
+
+
+@app.post("/api/demo/provider-sync")
+def demo_provider_sync(session_id: str = ""):
+    return provider.push_clarified_prescription(PATIENT_ID, session_id)
 
 
 @app.post("/api/demo/medication-reminder-now")

@@ -6,7 +6,7 @@ import { useStore } from '../store';
 import { C, font } from '../theme';
 
 export default function Profile() {
-  const { clearFeed, reconnectServer } = useStore();
+  const { clearFeed, reconnectServer, sessionId } = useStore();
   const [server, setServer] = useState(getApiBase());
   const [p, setP] = useState<any>(null);
   const [h, setH] = useState<any>(null);
@@ -82,6 +82,7 @@ export default function Profile() {
       <SectionTitle>Demo controls</SectionTitle>
       <Card style={{ gap: 10 }}>
         <Btn kind="soft" title="Simulate: next approved slot gets taken" onPress={() => run('Next booking will hit a slot conflict', () => post('/api/demo/conflict?on=true'))} />
+        <Btn kind="soft" title="Simulate: Dr. Meera's clinic sends clarified prescription" onPress={() => run('Provider record pushed — see Aarogya tab', () => post(`/api/demo/provider-sync?session_id=${sessionId}`))} />
         <Btn kind="soft" title="Trigger a medicine reminder now" onPress={() => run('Reminder fires in ~5s', () => post('/api/demo/medication-reminder-now'))} />
         <Btn kind="ghost" title="Reset demo data" onPress={() => run('Demo data reset', async () => { await post('/api/demo/reset'); clearFeed(); })} />
         {msg ? <Text style={[font.small, { color: C.primaryDark }]}>{msg}</Text> : null}
