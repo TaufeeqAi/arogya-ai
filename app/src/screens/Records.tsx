@@ -15,8 +15,21 @@ const TYPE: Record<string, [string, string]> = {
 export default function Records() {
   const { dataVersion, approvals, decide, send, upload, lastExtraction, activity } = useStore();
   const [uploading, setUploading] = useState('');
-  const pick = () => {
-    if (Platform.OS !== 'web') return;
+  const pick = async () => {
+    if (Platform.OS !== 'web') {
+      const DocumentPicker = require('expo-document-picker');
+      const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+      if (res.canceled || !res.assets?.length) return;
+      const a = res.assets[0];
+      setUploading(`Uploading ${a.name}…`);
+      try {
+        await upload({ uri: a.uri, name: a.name, type: a.mimeType || 'application/pdf' }, a.name);
+        setUploading('AI is reading your document…');
+      } catch (e: any) {
+        setUploading(`Upload failed: ${e.message}`);
+      }
+      return;
+    }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/pdf,image/*';

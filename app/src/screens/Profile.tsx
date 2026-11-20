@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { get, post } from '../api';
+import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { get, getApiBase, post, setApiBase } from '../api';
 import { Btn, Card, Pill, SectionTitle } from '../components/ui';
 import { useStore } from '../store';
 import { C, font } from '../theme';
 
 export default function Profile() {
-  const { clearFeed } = useStore();
+  const { clearFeed, reconnectServer } = useStore();
+  const [server, setServer] = useState(getApiBase());
   const [p, setP] = useState<any>(null);
   const [h, setH] = useState<any>(null);
   const [msg, setMsg] = useState('');
@@ -62,6 +63,21 @@ export default function Profile() {
           <Text style={font.small}>Checking…</Text>
         )}
       </Card>
+
+      {Platform.OS !== 'web' && (
+        <>
+          <SectionTitle>Server</SectionTitle>
+          <Card style={{ gap: 8 }}>
+            <TextInput value={server} onChangeText={setServer} autoCapitalize="none" autoCorrect={false}
+              style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, color: C.ink }} />
+            <Btn kind="soft" title="Save & reconnect" onPress={() => run('Server saved', async () => {
+              await setApiBase(server);
+              reconnectServer();
+              setH(await get('/api/health'));
+            })} />
+          </Card>
+        </>
+      )}
 
       <SectionTitle>Demo controls</SectionTitle>
       <Card style={{ gap: 10 }}>

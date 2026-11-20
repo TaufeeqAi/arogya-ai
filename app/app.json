@@ -17,19 +17,33 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "in.aarogya.app"
+      "package": "in.aarogya.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.BLUETOOTH_CONNECT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single",
-      "name": "Aarogya \u2014 AI Health Companion",
+      "name": "Aarogya — AI Health Companion",
       "shortName": "Aarogya",
       "themeColor": "#0F766E",
       "backgroundColor": "#F6F3EE",
       "lang": "hi",
       "display": "standalone",
       "orientation": "portrait"
+    },
+    "owner": "taufeeqai",
+    "extra": {
+      "eas": {
+        "projectId": "9da7437b-665d-4b41-bde7-bdc96cfcfd30"
+      }
     }
   }
 }

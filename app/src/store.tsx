@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AgentEvent, post, subscribe, url } from './api';
+import { AgentEvent, loadApiBase, post, subscribe, url } from './api';
 import type { UIItem } from './components/GenUI';
 import { joinVoice } from './voice/agora';
 
@@ -28,7 +28,8 @@ type Store = {
   clearFeed: () => void;
   dataVersion: number;
   lastExtraction: UIItem | null;
-  upload: (file: Blob, name: string) => Promise<void>;
+  upload: (file: any, name: string) => Promise<void>;
+  reconnectServer: () => void;
 };
 
 const Ctx = createContext<Store>(null as any);
@@ -52,16 +53,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const leaveRef = useRef<null | (() => Promise<void>)>(null);
   const sidRef = useRef('');
 
+  const [ready, setReady] = useState(false);
+  const [reconnect, setReconnect] = useState(0);
+
   useEffect(() => {
-    post('/api/session').then((r) => {
-      setSessionId(r.session_id);
-      sidRef.current = r.session_id;
-    });
+    loadApiBase().finally(() => setReady(true));
   }, []);
 
-  useEffect(
-    () =>
-      subscribe(
+  useEffect(() => {
+    if (!ready) return;
+    post('/api/session')
+      .then((r) => {
+        setSessionId(r.session_id);
+        sidRef.current = r.session_id;
+      })
+      .catch(() => setTimeout(() => setReconnect((n) => n + 1), 2000));
+  }, [ready, reconnect]);
+
+  useEffect(() => {
+    if (!ready) return;
+    return subscribe(
         (e: AgentEvent) => {
           const mine = !e.session_id || e.session_id === sidRef.current;
           if (e.type === 'activity') {
@@ -86,9 +97,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           }
         },
         (s) => setConnected(s === 'open'),
-      ),
-    [],
-  );
+      );
+  }, [ready, reconnect]);
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || !sidRef.current) return;
@@ -135,9 +145,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         sessionId, feed, activity, approvals, thinking, connected, voice, voiceError, levels, reminder,
         dismissReminder: () => setReminder(null), send, decide, startVoice, stopVoice,
         clearFeed: () => setFeed([]), dataVersion, lastExtraction,
-        upload: async (file: Blob, name: string) => {
+        reconnectServer: () => setReconnect((n) => n + 1),
+        upload: async (file: any, name: string) => {
           const fd = new FormData();
-          fd.append('file', file, name);
+          if (file && typeof file === 'object' && 'uri' in file) fd.append('file', file as any); // native {uri,name,type}
+          else fd.append('file', file, name);
           fd.append('session_id', sidRef.current);
           const r = await fetch(url('/api/documents/upload'), { method: 'POST', body: fd, headers: { 'ngrok-skip-browser-warning': '1' } });
           if (!r.ok) throw new Error(await r.text());
