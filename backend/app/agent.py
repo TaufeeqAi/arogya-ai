@@ -28,9 +28,12 @@ SCRIPT_RULE = {
 }
 
 
-def system_prompt(language_hint: str) -> str:
+def system_prompt(lang_rule: str) -> str:
     now = datetime.now(TZ)
-    return f"""You are Aarogya, a warm, patient-controlled personal health companion for Indian families.
+    return f"""MANDATORY REPLY LANGUAGE FOR THIS TURN: {lang_rule}
+(The patient may switch language at any time; always follow the rule above for this reply, regardless of earlier turns.)
+
+You are Aarogya, a warm, patient-controlled personal health companion for Indian families.
 You are speaking on a real-time VOICE call. Today is {now.strftime('%A, %d %B %Y')}, time {now.strftime('%I:%M %p')} IST.
 The signed-in patient is Sunita Sharma (patient scope is enforced by the server).
 
@@ -64,7 +67,6 @@ ACTIONS (human-in-the-loop)
   and mention calendar reminder was added.
 - Medicine reminders/refills: get_medications first. Never create reminders for an instruction marked
   needs_clarification; explain it is unclear on the prescription and suggest confirming with the doctor.
-- Language hint for this session: {language_hint}.
 """
 
 
@@ -133,10 +135,19 @@ async def call_agent(state: State, config) -> dict:
     last_user = next((str(m.content) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)
                       and not str(m.content).startswith("[App event")), "")
     rl = safety.reply_language(last_user)
-    lang_rule = {"english": "The patient's latest message is in ENGLISH. Reply ONLY in natural English (Indian English is fine).",
-                 "devanagari": "The patient's latest message is in Hindi (Devanagari). Reply ONLY in Devanagari Hindi; keep test names and numbers in English.",
-                 "hinglish": "The patient's latest message is in Roman Hinglish. Reply ONLY in Roman Hinglish (Hindi in Latin script)."}[rl]
-    msgs = [SystemMessage(content=system_prompt(lang))] + _window(state["messages"]) +            [SystemMessage(content=f"LANGUAGE FOR THIS REPLY: {lang_rule} Use feminine first person if Hindi.")]
+    lang_rule = {"english": "ENGLISH. The patient wrote in English, so reply ONLY in natural English.",
+                 "devanagari": "HINDI in Devanagari script (keep test names and numbers in English). Use feminine first person.",
+                 "hinglish": "ROMAN HINGLISH (Hindi written in Latin script). Use feminine first person."}[rl]
+    tag = {"english": "[Reply in English]", "devanagari": "[हिंदी (देवनागरी) में जवाब दें]",
+           "hinglish": "[Reply in Roman Hinglish]"}[rl]
+    window = _window(state["messages"])
+    # annotate the latest patient turn (model-facing copy only; stored history stays clean)
+    for i in range(len(window) - 1, -1, -1):
+        m = window[i]
+        if isinstance(m, HumanMessage) and not str(m.content).startswith("[App event"):
+            window = window[:i] + [HumanMessage(content=str(m.content) + "  " + tag)] + window[i + 1:]
+            break
+    msgs = [SystemMessage(content=system_prompt(lang_rule))] + window
     resp = await llm.ainvoke(msgs, config)
     calls = [c["name"] for c in getattr(resp, "tool_calls", []) or []]
     print(f"LLM {sid} {time.perf_counter() - t0:.2f}s -> {calls or 'answer'}", flush=True)
