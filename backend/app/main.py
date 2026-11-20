@@ -55,6 +55,8 @@ async def lifespan(app: FastAPI):
     if not seeded:
         reset_and_seed()
     task = asyncio.create_task(reminder_loop())
+    from . import nemo_rail
+    asyncio.get_running_loop().run_in_executor(None, nemo_rail.warmup)  # local embedding rail, warms in background
     yield
     task.cancel()
 

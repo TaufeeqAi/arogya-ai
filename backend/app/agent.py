@@ -12,7 +12,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from . import safety
+from . import nemo_rail, safety
 from .actions import TZ
 from .config import get_settings
 from .events import activity, emit
@@ -21,9 +21,10 @@ from .tools import ALL_TOOLS
 S = get_settings()
 
 SCRIPT_RULE = {
-    "devanagari": "Write Hindi in Devanagari script (हिंदी), keep English medical terms and numbers in English "
-                  "(e.g. 'आपका HbA1c 8.1 percent है'). This text is spoken by a Hindi TTS voice.",
-    "latin": "Write Hindi in Roman script (Hinglish), e.g. 'Aapka HbA1c 8.1 percent hai'.",
+    "devanagari": "Use ONE script per reply, matching the patient's message: if they wrote/spoke in Devanagari, reply "
+                  "fully in Devanagari Hindi (keep test names like HbA1c, LDL and numbers in English); if they wrote in "
+                  "Roman Hinglish, reply fully in Roman Hinglish. Never mix scripts in one reply.",
+    "latin": "Write Hindi in Roman script (Hinglish), e.g. 'Aapka HbA1c 8.1 percent hai'. Never use Devanagari.",
 }
 
 
@@ -93,14 +94,21 @@ def _ctx(config) -> tuple[str, str, str]:
     return c["patient_id"], c.get("session_id", ""), c.get("language_hint", "Hindi/Hinglish")
 
 
-def guard_input(state: State, config) -> dict:
+async def guard_input(state: State, config) -> dict:
     pid, sid, _ = _ctx(config)
     last = state["messages"][-1]
-    if isinstance(last, HumanMessage) and safety.is_emergency(str(last.content)):
+    text = str(last.content) if isinstance(last, HumanMessage) else ""
+    if text and safety.is_emergency(text):
         activity(pid, sid, "Safety policy: emergency escalation", "failed", "Fixed escalation response; no AI advice",
                  "safety_guard")
         emit(pid, sid, "ui", {"component": "emergency", "version": 1, "props": {"call": "112"}})
-        return {"emergency": True, "messages": [AIMessage(content=safety.emergency_reply(S.response_script, str(last.content)))]}
+        return {"emergency": True, "messages": [AIMessage(content=safety.emergency_reply(S.response_script, text))]}
+    if text and not text.startswith("[App event"):
+        key, ms = await nemo_rail.check(text)
+        if key:
+            activity(pid, sid, f"NeMo Guardrails input rail: {key.replace('_', ' ')}", "failed",
+                     f"blocked before the LLM · {ms:.0f} ms", "nemo_guardrails")
+            return {"emergency": True, "messages": [AIMessage(content=nemo_rail.REPLIES[key])]}
     return {"emergency": False}
 
 

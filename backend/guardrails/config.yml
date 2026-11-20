@@ -1,0 +1,14 @@
+# NeMo Guardrails: embedding-only input rail (runs locally, no extra LLM calls in the voice loop).
+models:
+  - type: embeddings
+    engine: FastEmbed
+    model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+
+rails:
+  dialog:
+    user_messages:
+      embeddings_only: true
+      embeddings_only_similarity_threshold: 0.70
+      embeddings_only_fallback_intent: "pass through"
+
+lowest_temperature: 0.0

@@ -13,6 +13,7 @@ dependencies = [
     "langchain-openai>=1.8.5",
     "langgraph>=1.2.24",
     "minio>=7.2.20",
+    "nemoguardrails>=0.25.0",
     "psycopg[binary]>=3.3.9",
     "pydantic-settings>=2.16.3",
     "python-multipart>=0.0.34",
