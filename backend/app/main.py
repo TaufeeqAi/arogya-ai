@@ -168,8 +168,8 @@ async def agora_llm(session_id: str, request: Request):
         yield _chunk("", role=True)
         done, _ = await asyncio.wait({task}, timeout=1.6)
         if not done:  # mask tool latency with a natural filler so the caller is never in silence
-            from .safety import reply_language
-            yield _chunk(FILLER[reply_language(text)])
+            from .agent import turn_language
+            yield _chunk(FILLER[turn_language(text)])
         reply = await task
         # stream sentence-ish pieces so TTS can start early
         buf = ""

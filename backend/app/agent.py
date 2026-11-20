@@ -1,6 +1,8 @@
 """LangGraph orchestrator: deterministic input guard -> tool-calling agent loop -> deterministic output guard."""
 from __future__ import annotations
 
+import asyncio
+import re
 import time
 from datetime import datetime, timezone
 from typing import Annotated, TypedDict
@@ -12,7 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from . import nemo_rail, safety
+from . import nemo_rail, safety, transcript
 from .actions import TZ
 from .config import get_settings
 from .events import activity, emit
@@ -104,13 +106,16 @@ async def guard_input(state: State, config) -> dict:
         activity(pid, sid, "Safety policy: emergency escalation", "failed", "Fixed escalation response; no AI advice",
                  "safety_guard")
         emit(pid, sid, "ui", {"component": "emergency", "version": 1, "props": {"call": "112"}})
-        return {"emergency": True, "messages": [AIMessage(content=safety.emergency_reply(S.response_script, text))]}
+        rl = config.get("configurable", {}).get("reply_lang", "")
+        reply = safety.EMERGENCY_REPLY_EN if rl == "english" else safety.emergency_reply(S.response_script, text)
+        return {"emergency": True, "messages": [AIMessage(content=reply)]}
     if text and not text.startswith("[App event"):
         key, ms = await nemo_rail.check(text)
         if key:
             activity(pid, sid, f"NeMo Guardrails input rail: {key.replace('_', ' ')}", "failed",
                      f"blocked before the LLM · {ms:.0f} ms", "nemo_guardrails")
-            return {"emergency": True, "messages": [AIMessage(content=nemo_rail.reply_for(key, text))]}
+            rl = config.get("configurable", {}).get("reply_lang", "hinglish")
+            return {"emergency": True, "messages": [AIMessage(content=nemo_rail.REPLIES_EN[key] if rl == "english" else nemo_rail.REPLIES[key])]}
     return {"emergency": False}
 
 
@@ -134,7 +139,7 @@ async def call_agent(state: State, config) -> dict:
     t0 = time.perf_counter()
     last_user = next((str(m.content) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)
                       and not str(m.content).startswith("[App event")), "")
-    rl = safety.reply_language(last_user)
+    rl = config.get("configurable", {}).get("reply_lang") or safety.reply_language(last_user)
     lang_rule = {"english": "ENGLISH. The patient wrote in English, so reply ONLY in natural English.",
                  "devanagari": "HINDI in Devanagari script (keep test names and numbers in English). Use feminine first person.",
                  "hinglish": "ROMAN HINGLISH (Hindi written in Latin script). Use feminine first person."}[rl]
@@ -183,11 +188,32 @@ g.add_edge("guard_output", END)
 graph = g.compile(checkpointer=MemorySaver())
 
 
+def turn_language(text: str) -> str:
+    """Fast, deterministic reply-language choice. Handles the hi-IN ASR writing English speech in Devanagari."""
+    if transcript.needs_normalization(text) or re.search(r"[ऀ-ॿ]", text):
+        en, hi = transcript.english_signal(text)
+        if en >= 2 and en >= 2 * hi:
+            return "english"
+        if en >= 2 and hi >= 1:
+            return "hinglish"
+        return "devanagari"
+    return safety.reply_language(text)
+
+
 async def run_turn(patient_id: str, session_id: str, text: str, channel: str = "text",
                    language_hint: str = "Hindi/Hinglish") -> str:
-    emit(patient_id, session_id, "transcript", {"role": "user", "text": text, "channel": channel})
+    rl = turn_language(text)
+    # Show the user's words in the right script; runs in parallel with the agent (off the critical path)
+    norm_task = asyncio.create_task(transcript.normalize(text)) if transcript.needs_normalization(text) else None
+
+    async def _emit_user():
+        shown = await norm_task if norm_task else text
+        emit(patient_id, session_id, "transcript", {"role": "user", "text": shown, "channel": channel,
+                                                    "asr_raw": text if shown != text else None})
+    user_emit = asyncio.create_task(_emit_user())
+
     config = {"configurable": {"thread_id": session_id, "patient_id": patient_id, "session_id": session_id,
-                               "language_hint": language_hint, "user_text": text,
+                               "language_hint": language_hint, "user_text": text, "reply_lang": rl,
                                "turn_started": datetime.now(timezone.utc).isoformat()}, "recursion_limit": 25}
     try:
         out = await graph.ainvoke({"messages": [HumanMessage(content=text)]}, config)
@@ -196,6 +222,10 @@ async def run_turn(patient_id: str, session_id: str, text: str, channel: str = "
         activity(patient_id, session_id, "Agent error", "failed", type(e).__name__, "agent")
         print("AGENT ERROR", repr(e))
         reply = "Maaf kijiye, abhi mujhe thodi dikkat aa rahi hai. Kya aap ek baar phir bol sakti hain?"
+    try:
+        await asyncio.wait_for(user_emit, timeout=4)  # keep user line before assistant line in the UI
+    except Exception:
+        pass
     emit(patient_id, session_id, "transcript", {"role": "assistant", "text": reply, "channel": channel})
     return reply
 
