@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "conversation_id": {
+      "title": "Conversation Id",
+      "type": "string"
+    },
+    "workflow_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflow Run Id"
+    },
+    "sequence": {
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "agent.session.started",
+        "agent.status.changed",
+        "conversation.transcript.partial",
+        "conversation.transcript.final",
+        "assistant.message.started",
+        "assistant.message.delta",
+        "assistant.message.completed",
+        "ui.component.render",
+        "ui.component.update",
+        "tool.execution.started",
+        "tool.execution.completed",
+        "tool.execution.failed",
+        "approval.required",
+        "approval.completed",
+        "approval.rejected",
+        "approval.expired",
+        "workflow.completed",
+        "workflow.failed",
+        "safety.notice"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event_id",
+    "conversation_id",
+    "sequence",
+    "occurred_at",
+    "type"
+  ],
+  "title": "AgentEvent",
+  "type": "object"
+}

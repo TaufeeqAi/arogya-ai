@@ -1,0 +1,780 @@
+{
+  "$defs": {
+    "AppointmentSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "clinic_id": {
+          "title": "Clinic Id",
+          "type": "string"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "ends_at": {
+          "format": "date-time",
+          "title": "Ends At",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "consultation_mode": {
+          "enum": [
+            "IN_PERSON",
+            "VIDEO",
+            "PHONE"
+          ],
+          "title": "Consultation Mode",
+          "type": "string"
+        },
+        "availability_status": {
+          "enum": [
+            "AVAILABLE",
+            "HELD",
+            "BOOKED",
+            "UNAVAILABLE",
+            "EXPIRED"
+          ],
+          "title": "Availability Status",
+          "type": "string"
+        },
+        "fetched_at": {
+          "format": "date-time",
+          "title": "Fetched At",
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        }
+      },
+      "required": [
+        "slot_id",
+        "provider_id",
+        "clinic_id",
+        "starts_at",
+        "ends_at",
+        "timezone",
+        "consultation_mode",
+        "availability_status",
+        "fetched_at"
+      ],
+      "title": "AppointmentSlot",
+      "type": "object"
+    },
+    "AppointmentSlotsComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "const": "appointment_slots",
+          "title": "Component",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "default": "1",
+          "title": "Version",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AppointmentSlotsPayload"
+        }
+      },
+      "required": [
+        "component",
+        "payload"
+      ],
+      "title": "AppointmentSlotsComponent",
+      "type": "object"
+    },
+    "AppointmentSlotsPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "$ref": "#/$defs/ProviderSummary"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/AppointmentSlot"
+          },
+          "title": "Slots",
+          "type": "array"
+        },
+        "availability_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Availability Note"
+        }
+      },
+      "required": [
+        "provider",
+        "slots"
+      ],
+      "title": "AppointmentSlotsPayload",
+      "type": "object"
+    },
+    "ApprovalCardComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "const": "approval_card",
+          "title": "Component",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "default": "1",
+          "title": "Version",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ApprovalCardPayload"
+        }
+      },
+      "required": [
+        "component",
+        "payload"
+      ],
+      "title": "ApprovalCardComponent",
+      "type": "object"
+    },
+    "ApprovalCardPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "payload_hash": {
+          "title": "Payload Hash",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "exact_details": {
+          "additionalProperties": true,
+          "title": "Exact Details",
+          "type": "object"
+        }
+      },
+      "required": [
+        "approval_id",
+        "action_type",
+        "summary",
+        "payload_hash",
+        "expires_at",
+        "exact_details"
+      ],
+      "title": "ApprovalCardPayload",
+      "type": "object"
+    },
+    "EvidenceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "title": "Document Id",
+          "type": "string"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Number"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Locator"
+        },
+        "source_kind": {
+          "enum": [
+            "PATIENT_UPLOAD",
+            "PROVIDER_IMPORT",
+            "LAB_IMPORT",
+            "PATIENT_REPORTED",
+            "PROVIDER_AUTHORED",
+            "SYSTEM_DERIVED"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "verification_status": {
+          "enum": [
+            "UNVERIFIED",
+            "PATIENT_ATTESTED",
+            "PATIENT_CONFIRMED",
+            "PROVIDER_AUTHENTICATED",
+            "PROVIDER_VERIFIED",
+            "REVIEW_REQUIRED",
+            "REJECTED",
+            "SOURCE_ONLY"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At"
+        }
+      },
+      "required": [
+        "document_id",
+        "source_kind",
+        "verification_status"
+      ],
+      "title": "EvidenceReference",
+      "type": "object"
+    },
+    "HealthSummaryComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "const": "health_summary",
+          "title": "Component",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "default": "1",
+          "title": "Version",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/HealthSummaryPayload"
+        }
+      },
+      "required": [
+        "component",
+        "payload"
+      ],
+      "title": "HealthSummaryComponent",
+      "type": "object"
+    },
+    "HealthSummaryPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "title": "Heading",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "qualification": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qualification"
+        }
+      },
+      "required": [
+        "heading",
+        "summary"
+      ],
+      "title": "HealthSummaryPayload",
+      "type": "object"
+    },
+    "LabObservationComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "const": "lab_observation",
+          "title": "Component",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "default": "1",
+          "title": "Version",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LabObservationPayload"
+        }
+      },
+      "required": [
+        "component",
+        "payload"
+      ],
+      "title": "LabObservationComponent",
+      "type": "object"
+    },
+    "LabObservationPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "observation_id": {
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "test_name": {
+          "title": "Test Name",
+          "type": "string"
+        },
+        "value_numeric": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Numeric"
+        },
+        "value_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Text"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "reference_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReferenceRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "laboratory_interpretation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Laboratory Interpretation"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At"
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceReference"
+        }
+      },
+      "required": [
+        "observation_id",
+        "test_name",
+        "evidence"
+      ],
+      "title": "LabObservationPayload",
+      "type": "object"
+    },
+    "MedicationScheduleComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "const": "medication_schedule",
+          "title": "Component",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "default": "1",
+          "title": "Version",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/MedicationSchedulePayload"
+        }
+      },
+      "required": [
+        "component",
+        "payload"
+      ],
+      "title": "MedicationScheduleComponent",
+      "type": "object"
+    },
+    "MedicationSchedulePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "medication_name": {
+          "title": "Medication Name",
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/MedicationSchedulePreview"
+        },
+        "status": {
+          "enum": [
+            "PREVIEW",
+            "PENDING_CONFIRMATION",
+            "ACTIVE"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "medication_name",
+        "schedule",
+        "status"
+      ],
+      "title": "MedicationSchedulePayload",
+      "type": "object"
+    },
+    "MedicationSchedulePreview": {
+      "additionalProperties": false,
+      "properties": {
+        "medication_id": {
+          "title": "Medication Id",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "times_of_day": {
+          "items": {
+            "format": "time",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Times Of Day",
+          "type": "array"
+        },
+        "days_of_week": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Days Of Week",
+          "type": "array"
+        },
+        "start_date": {
+          "format": "date",
+          "title": "Start Date",
+          "type": "string"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "source_document_id": {
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "source_verification_status": {
+          "enum": [
+            "UNVERIFIED",
+            "PATIENT_ATTESTED",
+            "PATIENT_CONFIRMED",
+            "PROVIDER_AUTHENTICATED",
+            "PROVIDER_VERIFIED",
+            "REVIEW_REQUIRED",
+            "REJECTED",
+            "SOURCE_ONLY"
+          ],
+          "title": "Source Verification Status",
+          "type": "string"
+        },
+        "patient_confirmation_required": {
+          "default": true,
+          "title": "Patient Confirmation Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "medication_id",
+        "timezone",
+        "times_of_day",
+        "start_date",
+        "source_document_id",
+        "source_verification_status"
+      ],
+      "title": "MedicationSchedulePreview",
+      "type": "object"
+    },
+    "ProviderSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "specialty": {
+          "title": "Specialty",
+          "type": "string"
+        },
+        "verification_status": {
+          "enum": [
+            "UNVERIFIED",
+            "PENDING",
+            "VERIFIED",
+            "REJECTED"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        },
+        "clinic_id": {
+          "title": "Clinic Id",
+          "type": "string"
+        },
+        "clinic_name": {
+          "title": "Clinic Name",
+          "type": "string"
+        },
+        "locality": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locality"
+        },
+        "city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "City"
+        },
+        "source_kind": {
+          "enum": [
+            "DEMO",
+            "PARTNER_API",
+            "PROVIDER_PORTAL"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_id",
+        "display_name",
+        "specialty",
+        "verification_status",
+        "clinic_id",
+        "clinic_name",
+        "source_kind"
+      ],
+      "title": "ProviderSummary",
+      "type": "object"
+    },
+    "ReferenceRange": {
+      "additionalProperties": false,
+      "properties": {
+        "low": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "High"
+        },
+        "original_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Text"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "title": "ReferenceRange",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "appointment_slots": "#/$defs/AppointmentSlotsComponent",
+      "approval_card": "#/$defs/ApprovalCardComponent",
+      "health_summary": "#/$defs/HealthSummaryComponent",
+      "lab_observation": "#/$defs/LabObservationComponent",
+      "medication_schedule": "#/$defs/MedicationScheduleComponent"
+    },
+    "propertyName": "component"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/HealthSummaryComponent"
+    },
+    {
+      "$ref": "#/$defs/LabObservationComponent"
+    },
+    {
+      "$ref": "#/$defs/AppointmentSlotsComponent"
+    },
+    {
+      "$ref": "#/$defs/MedicationScheduleComponent"
+    },
+    {
+      "$ref": "#/$defs/ApprovalCardComponent"
+    }
+  ]
+}

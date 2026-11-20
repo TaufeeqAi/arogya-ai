@@ -1,0 +1,256 @@
+{
+  "$defs": {
+    "AppointmentSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "slot_id": {
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "clinic_id": {
+          "title": "Clinic Id",
+          "type": "string"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "ends_at": {
+          "format": "date-time",
+          "title": "Ends At",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "consultation_mode": {
+          "enum": [
+            "IN_PERSON",
+            "VIDEO",
+            "PHONE"
+          ],
+          "title": "Consultation Mode",
+          "type": "string"
+        },
+        "availability_status": {
+          "enum": [
+            "AVAILABLE",
+            "HELD",
+            "BOOKED",
+            "UNAVAILABLE",
+            "EXPIRED"
+          ],
+          "title": "Availability Status",
+          "type": "string"
+        },
+        "fetched_at": {
+          "format": "date-time",
+          "title": "Fetched At",
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        }
+      },
+      "required": [
+        "slot_id",
+        "provider_id",
+        "clinic_id",
+        "starts_at",
+        "ends_at",
+        "timezone",
+        "consultation_mode",
+        "availability_status",
+        "fetched_at"
+      ],
+      "title": "AppointmentSlot",
+      "type": "object"
+    },
+    "ProviderSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "specialty": {
+          "title": "Specialty",
+          "type": "string"
+        },
+        "verification_status": {
+          "enum": [
+            "UNVERIFIED",
+            "PENDING",
+            "VERIFIED",
+            "REJECTED"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        },
+        "clinic_id": {
+          "title": "Clinic Id",
+          "type": "string"
+        },
+        "clinic_name": {
+          "title": "Clinic Name",
+          "type": "string"
+        },
+        "locality": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locality"
+        },
+        "city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "City"
+        },
+        "source_kind": {
+          "enum": [
+            "DEMO",
+            "PARTNER_API",
+            "PROVIDER_PORTAL"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_id",
+        "display_name",
+        "specialty",
+        "verification_status",
+        "clinic_id",
+        "clinic_name",
+        "source_kind"
+      ],
+      "title": "ProviderSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "appointment_id": {
+      "title": "Appointment Id",
+      "type": "string"
+    },
+    "provider": {
+      "$ref": "#/$defs/ProviderSummary"
+    },
+    "slot": {
+      "$ref": "#/$defs/AppointmentSlot"
+    },
+    "status": {
+      "enum": [
+        "REQUESTED",
+        "PENDING_APPROVAL",
+        "BOOKING",
+        "CONFIRMED",
+        "CANCEL_PENDING",
+        "CANCELLED",
+        "FAILED",
+        "UNKNOWN",
+        "COMPLETED",
+        "NO_SHOW"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "external_booking_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "External Booking Reference"
+    },
+    "confirmed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmed At"
+    },
+    "fee_amount": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fee Amount"
+    },
+    "currency": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Currency"
+    }
+  },
+  "required": [
+    "appointment_id",
+    "provider",
+    "slot",
+    "status"
+  ],
+  "title": "AppointmentBooking",
+  "type": "object"
+}

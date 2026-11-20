@@ -1,0 +1,347 @@
+{
+  "$defs": {
+    "EvidenceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "title": "Document Id",
+          "type": "string"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Number"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Locator"
+        },
+        "source_kind": {
+          "enum": [
+            "PATIENT_UPLOAD",
+            "PROVIDER_IMPORT",
+            "LAB_IMPORT",
+            "PATIENT_REPORTED",
+            "PROVIDER_AUTHORED",
+            "SYSTEM_DERIVED"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "verification_status": {
+          "enum": [
+            "UNVERIFIED",
+            "PATIENT_ATTESTED",
+            "PATIENT_CONFIRMED",
+            "PROVIDER_AUTHENTICATED",
+            "PROVIDER_VERIFIED",
+            "REVIEW_REQUIRED",
+            "REJECTED",
+            "SOURCE_ONLY"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At"
+        }
+      },
+      "required": [
+        "document_id",
+        "source_kind",
+        "verification_status"
+      ],
+      "title": "EvidenceReference",
+      "type": "object"
+    },
+    "ReferenceRange": {
+      "additionalProperties": false,
+      "properties": {
+        "low": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "High"
+        },
+        "original_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Text"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "title": "ReferenceRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "observation_id": {
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "patient_ref": {
+      "title": "Patient Ref",
+      "type": "string"
+    },
+    "document_id": {
+      "title": "Document Id",
+      "type": "string"
+    },
+    "test_name_original": {
+      "title": "Test Name Original",
+      "type": "string"
+    },
+    "test_name_normalized": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Test Name Normalized"
+    },
+    "test_code_system": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Test Code System"
+    },
+    "test_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Test Code"
+    },
+    "value_numeric": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value Numeric"
+    },
+    "value_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value Text"
+    },
+    "unit_original": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Unit Original"
+    },
+    "unit_normalized": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Unit Normalized"
+    },
+    "reference_range": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReferenceRange"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "laboratory_interpretation": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Laboratory Interpretation"
+    },
+    "observed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed At"
+    },
+    "laboratory_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Laboratory Name"
+    },
+    "evidence": {
+      "$ref": "#/$defs/EvidenceReference"
+    },
+    "extraction_confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extraction Confidence"
+    },
+    "verification_status": {
+      "enum": [
+        "UNVERIFIED",
+        "PATIENT_ATTESTED",
+        "PATIENT_CONFIRMED",
+        "PROVIDER_AUTHENTICATED",
+        "PROVIDER_VERIFIED",
+        "REVIEW_REQUIRED",
+        "REJECTED",
+        "SOURCE_ONLY"
+      ],
+      "title": "Verification Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "observation_id",
+    "patient_ref",
+    "document_id",
+    "test_name_original",
+    "evidence",
+    "verification_status"
+  ],
+  "title": "HealthObservation",
+  "type": "object"
+}
