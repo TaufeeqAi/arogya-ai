@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
-import { url } from '../api';
+import { post, url } from '../api';
 import { C, font } from '../theme';
 import { Btn, Card, Pill, SourceChip, TrustBadge } from './ui';
 
@@ -325,6 +325,41 @@ function Order({ p }: { p: any }) {
   );
 }
 
+function ExtractionReview({ p }: { p: any }) {
+  const [state, setState] = useState<'review' | 'saving' | 'confirmed'>('review');
+  const confirm = async () => {
+    setState('saving');
+    await post(`/api/documents/${p.document_id}/confirm`, {}).catch(() => {});
+    setState('confirmed');
+  };
+  return (
+    <Card tone={state === 'confirmed' ? 'ok' : 'warn'}>
+      <View style={st.row}>
+        <Text style={font.tiny}>AI EXTRACTED · PLEASE REVIEW</Text>
+        <Pill text={state === 'confirmed' ? 'Confirmed ✓' : 'Needs your review'} tone={state === 'confirmed' ? 'ok' : 'warn'} />
+      </View>
+      <Text style={[font.h3, { marginTop: 4 }]}>{p.title}</Text>
+      <Text style={font.small}>{p.source_name} · {fmtDate(p.issued_on)}</Text>
+      <Text style={[font.body, { marginTop: 6, color: C.inkSoft }]}>{p.summary}</Text>
+      {p.observations.map((o: any, i: number) => (
+        <View key={i} style={[st.row, { paddingVertical: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }]}>
+          <Text style={[font.small, { flex: 1, color: C.ink }]}>{o.test_name}</Text>
+          <Text style={[font.small, { fontWeight: '800', color: C.ink }]}>{o.value} {o.unit}</Text>
+          <Text style={[font.tiny, { width: 78, textAlign: 'right' }]}>{o.ref_text}</Text>
+        </View>
+      ))}
+      {p.medications?.length ? <Text style={[font.small, { marginTop: 6 }]}>Medicines found: {p.medications.map((m: any) => m.name).join(', ')} (need verification)</Text> : null}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Btn title={state === 'confirmed' ? 'Added to health memory' : state === 'saving' ? 'Saving…' : 'Values match — confirm'} onPress={confirm} disabled={state !== 'review'} />
+        </View>
+        <Btn kind="ghost" title="View PDF" onPress={() => Linking.openURL(url(`/api/documents/${p.document_id}/file`))} />
+      </View>
+      <Text style={[font.tiny, { marginTop: 8 }]}>Unconfirmed values are never used in comparisons or answers.</Text>
+    </Card>
+  );
+}
+
 function Emergency() {
   return (
     <Card tone="danger" style={{ backgroundColor: C.dangerSoft }}>
@@ -351,6 +386,7 @@ export function GenUI({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
       case 'doctor_brief': return <DoctorBrief p={p} />;
       case 'order_confirmation': return <Order p={p} />;
       case 'emergency': return <Emergency />;
+      case 'extraction_review': return <ExtractionReview p={p} />;
       default: return null; // unknown component: ignored safely
     }
   } catch {

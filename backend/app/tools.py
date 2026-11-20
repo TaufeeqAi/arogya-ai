@@ -83,7 +83,7 @@ def compare_lab_history(config: RunnableConfig, test_codes: list[str] | None = N
              f"{n} matching tests · {len(res['not_comparable'])} not comparable", "compare_lab_observations")
     ui(pid, sid, "comparison_chart", res)
     slim = [{k: c[k] for k in ("test_name", "unit", "previous", "latest", "change", "change_pct", "direction",
-                                "reference_range", "latest_lab_flag")} | {"dates": [p["observed_on"] for p in c["points"]]}
+                                "reference_range", "latest_lab_flag")} | {"history": [f"{p['observed_on']}: {p['value']}" for p in c["points"]]}
             for c in res["comparisons"]]
     return {"ok": True, "method": res["method"], "comparisons": slim, "not_comparable": res["not_comparable"]}
 

@@ -83,6 +83,8 @@ def compare(patient_id: str, test_codes: list[str] | None = None) -> dict:
             "latest_lab_flag": obs_dict(latest)["lab_flag"],
             "reference_range_changed": prev.ref_text != latest.ref_text,
         })
+    order = ["HBA1C", "FBS", "LDL", "CHOL", "TG", "HDL", "CREAT", "HB"]
+    comparisons.sort(key=lambda c: order.index(c["test_code"]) if c["test_code"] in order else 99)
     return {"method": "deterministic-diff v1 (same test code + same unit only; no clinical interpretation)",
             "comparisons": comparisons, "not_comparable": not_comparable}
 

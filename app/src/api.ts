@@ -29,7 +29,7 @@ export async function post<T = any>(path: string, body?: any): Promise<T> {
 }
 
 export type AgentEvent = {
-  type: 'activity' | 'ui' | 'transcript' | 'approval_resolved' | 'reminder';
+  type: 'activity' | 'ui' | 'transcript' | 'approval_resolved' | 'reminder' | 'document_updated';
   session_id: string;
   payload: any;
   ts: string;

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AgentEvent, post, subscribe } from './api';
+import { AgentEvent, post, subscribe, url } from './api';
 import type { UIItem } from './components/GenUI';
 import { joinVoice } from './voice/agora';
 
@@ -27,6 +27,8 @@ type Store = {
   stopVoice: () => Promise<void>;
   clearFeed: () => void;
   dataVersion: number;
+  lastExtraction: UIItem | null;
+  upload: (file: Blob, name: string) => Promise<void>;
 };
 
 const Ctx = createContext<Store>(null as any);
@@ -46,6 +48,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [levels, setLevels] = useState({ agent: 0, me: 0 });
   const [reminder, setReminder] = useState<any | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [lastExtraction, setLastExtraction] = useState<UIItem | null>(null);
   const leaveRef = useRef<null | (() => Promise<void>)>(null);
   const sidRef = useRef('');
 
@@ -66,6 +69,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           } else if (e.type === 'ui' && mine) {
             setFeed((f) => [...f, { kind: 'ui', id: nid(), item: { id: nid(), ...e.payload } }]);
             if (e.payload.component === 'approval_card') setApprovals((a) => ({ ...a, [e.payload.props.approval_id]: 'pending' }));
+            if (e.payload.component === 'extraction_review') setLastExtraction({ id: nid(), ...e.payload });
             if (['booking_confirmation', 'share_confirmation', 'medication_schedule', 'order_confirmation'].includes(e.payload.component))
               setDataVersion((v) => v + 1);
           } else if (e.type === 'transcript' && mine) {
@@ -74,6 +78,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             setFeed((f) => [...f, { kind: 'msg', id: nid(), role: e.payload.role, text: e.payload.text, channel: e.payload.channel }]);
           } else if (e.type === 'approval_resolved') {
             setApprovals((a) => ({ ...a, [e.payload.approval_id]: e.payload.status }));
+          } else if (e.type === 'document_updated') {
+            setDataVersion((v) => v + 1);
           } else if (e.type === 'reminder') {
             setReminder(e.payload);
             setDataVersion((v) => v + 1);
@@ -128,7 +134,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       value={{
         sessionId, feed, activity, approvals, thinking, connected, voice, voiceError, levels, reminder,
         dismissReminder: () => setReminder(null), send, decide, startVoice, stopVoice,
-        clearFeed: () => setFeed([]), dataVersion,
+        clearFeed: () => setFeed([]), dataVersion, lastExtraction,
+        upload: async (file: Blob, name: string) => {
+          const fd = new FormData();
+          fd.append('file', file, name);
+          fd.append('session_id', sidRef.current);
+          const r = await fetch(url('/api/documents/upload'), { method: 'POST', body: fd, headers: { 'ngrok-skip-browser-warning': '1' } });
+          if (!r.ok) throw new Error(await r.text());
+          setDataVersion((v) => v + 1);
+        },
       }}
     >
       {children}

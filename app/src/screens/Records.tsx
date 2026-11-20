@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { get, url } from '../api';
 import { GenUI } from '../components/GenUI';
 import { Btn, Card, Pill, SectionTitle, TrustBadge } from '../components/ui';
@@ -13,7 +13,29 @@ const TYPE: Record<string, [string, string]> = {
 };
 
 export default function Records() {
-  const { dataVersion, approvals, decide, send } = useStore();
+  const { dataVersion, approvals, decide, send, upload, lastExtraction, activity } = useStore();
+  const [uploading, setUploading] = useState('');
+  const pick = () => {
+    if (Platform.OS !== 'web') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,image/*';
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      setUploading(`Uploading ${f.name}…`);
+      try {
+        await upload(f, f.name);
+        setUploading('AI is reading your document…');
+      } catch (e: any) {
+        setUploading(`Upload failed: ${e.message}`);
+      }
+    };
+    input.click();
+  };
+  useEffect(() => {
+    if (lastExtraction) setUploading('');
+  }, [lastExtraction]);
   const [docs, setDocs] = useState<any[]>([]);
   const [cmp, setCmp] = useState<any>(null);
   const [open, setOpen] = useState<any>(null);
@@ -52,6 +74,15 @@ export default function Records() {
     <ScrollView contentContainerStyle={s.page}>
       <Text style={font.h1}>Health Locker</Text>
       <Text style={[font.small, { marginBottom: 14 }]}>Every value links back to its original document.</Text>
+      <Btn title="⬆  Upload a report or prescription" onPress={pick} />
+      {uploading ? (
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 10 }}>
+          {uploading.startsWith('Upload failed') ? null : <ActivityIndicator color={C.primary} />}
+          <Text style={font.small}>{uploading}</Text>
+        </View>
+      ) : null}
+      {lastExtraction && <View style={{ marginTop: 12 }}><GenUI ctx={ctx} item={lastExtraction} /></View>}
+      <View style={{ height: 12 }} />
       {cmp && <GenUI ctx={ctx} item={{ id: 'cmp', component: 'comparison_chart', version: 1, props: cmp }} />}
       <SectionTitle right={<Pill text={`${docs.length} documents`} />}>Documents</SectionTitle>
       {docs.map((d) => (
@@ -60,6 +91,7 @@ export default function Records() {
             <Text style={{ fontSize: 26 }}>{TYPE[d.doc_type]?.[0] || '📄'}</Text>
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={font.h3}>{d.title}</Text>
+              {d.status !== 'processed' ? <Pill text={d.status === 'extracting' ? 'AI extracting…' : d.status === 'needs_review' ? 'Needs your review' : d.status} tone="warn" /> : null}
               <Text style={font.small}>{TYPE[d.doc_type]?.[1]} · {d.source_name} · {d.source_type === 'provider_import' ? 'Synced from provider' : 'Uploaded by you'}</Text>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 <TrustBadge label={d.trust_label} />
