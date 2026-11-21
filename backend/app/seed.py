@@ -170,28 +170,80 @@ def reset_and_seed() -> None:
                        issued_on=RX_DATE, storage_key=f"{PATIENT_ID}/doc-note-may.pdf", sha256=sha,
                        trust_label="provider_verified", text="\n".join(note)))
 
-        # Prescription: one complete instruction, one deliberately incomplete (safety demo)
+        # Prescription (May 2026, photo uploaded by patient): one clear instruction, one illegible, one stop order
         rx = [
             "1. Tab. Metformin 500 mg - 1 tablet twice daily after breakfast and after dinner - 6 months.",
             "2. Tab. Atorvastatin 10 mg - ____ (frequency not legible on scanned copy).",
+            "3. STOP Tab. Glimepiride 1 mg (replaced by Metformin).",
             "Advice: repeat HbA1c and lipid profile after 6 months.",
         ]
         pdf = _pdf("Prescription - Rao Family Clinic",
                    ["Patient: Sunita Sharma | 56/F", f"Date: {RX_DATE.strftime('%d %b %Y')} | Dr. Meera Rao, Reg. SYN-KMC-1182"],
                    None, rx)
         sha = storage.put(f"{PATIENT_ID}/doc-rx-may.pdf", pdf)
-        s.add(Document(id="doc-rx-may", patient_id=PATIENT_ID, title="Prescription - Dr. Meera Rao",
+        s.add(Document(id="doc-rx-may", patient_id=PATIENT_ID, title="Prescription - Dr. Meera Rao (May 2026)",
                        doc_type="prescription", source_type="patient_upload", source_name="Rao Family Clinic",
                        issued_on=RX_DATE, storage_key=f"{PATIENT_ID}/doc-rx-may.pdf", sha256=sha,
                        trust_label="patient_uploaded", text="\n".join(rx)))
+        # Prescription (Nov 2025, synced from the clinic EMR): long-term medicines
+        rx2_date = date(2025, 11, 14)
+        rx2 = [
+            "1. Tab. Telmisartan 40 mg - 1 tablet once daily in the morning (8:00 AM) - continue.",
+            "2. Tab. Pantoprazole 40 mg - 1 tablet once daily before breakfast (7:30 AM) - continue.",
+            "3. Tab. Calcium carbonate 500 mg - 1 tablet once daily after lunch (2:00 PM) - continue.",
+            "4. Cap. Vitamin D3 60,000 IU - 1 capsule once a week on Sunday (9:00 AM) - continue.",
+        ]
+        pdf = _pdf("Prescription - Rao Family Clinic",
+                   ["Patient: Sunita Sharma | 55/F", f"Date: {rx2_date.strftime('%d %b %Y')} | Dr. Meera Rao, Reg. SYN-KMC-1182",
+                    "Digitally signed via Rao Family Clinic EMR"], None, rx2)
+        sha = storage.put(f"{PATIENT_ID}/doc-rx-nov25.pdf", pdf)
+        s.add(Document(id="doc-rx-nov25", patient_id=PATIENT_ID, title="Prescription - Dr. Meera Rao (Nov 2025)",
+                       doc_type="prescription", source_type="provider_import", source_name="Rao Family Clinic",
+                       issued_on=rx2_date, storage_key=f"{PATIENT_ID}/doc-rx-nov25.pdf", sha256=sha,
+                       trust_label="provider_verified", text="\n".join(rx2)))
         s.flush()
-        s.add(Medication(id="med-metformin", patient_id=PATIENT_ID, document_id="doc-rx-may", name="Metformin",
-                         strength="500 mg", frequency="Twice daily", times=["08:30", "20:30"],
-                         instructions="After breakfast and after dinner", duration_days=180, start_date=RX_DATE,
-                         supply_left_days=4, status="verified"))
-        s.add(Medication(id="med-atorva", patient_id=PATIENT_ID, document_id="doc-rx-may", name="Atorvastatin",
-                         strength="10 mg", frequency=None, times=[], instructions="Frequency not legible on source",
-                         duration_days=None, start_date=RX_DATE, supply_left_days=10, status="needs_clarification"))
+
+        def med(mid, doc, name, strength, freq, times, instr, start, supply, status, days=None):
+            s.add(Medication(id=mid, patient_id=PATIENT_ID, document_id=doc, name=name, strength=strength, frequency=freq,
+                             times=times, instructions=instr, duration_days=days, start_date=start,
+                             supply_left_days=supply, status=status))
+
+        med("med-metformin", "doc-rx-may", "Metformin", "500 mg", "Twice daily", ["08:30", "20:30"],
+            "After breakfast and after dinner", RX_DATE, 4, "verified", 180)
+        med("med-atorva", "doc-rx-may", "Atorvastatin", "10 mg", None, [], "Frequency not legible on source",
+            RX_DATE, 10, "needs_clarification")
+        med("med-glimepiride", "doc-rx-may", "Glimepiride", "1 mg", None, [],
+            "Stopped by Dr. Meera Rao on 11 May 2026 (replaced by Metformin). Do not restart without your doctor.",
+            date(2024, 3, 1), 0, "stopped")
+        med("med-telmisartan", "doc-rx-nov25", "Telmisartan", "40 mg", "Once daily", ["08:00"],
+            "Morning, with or without food", rx2_date, 25, "reminders_active")
+        med("med-pantoprazole", "doc-rx-nov25", "Pantoprazole", "40 mg", "Once daily", ["07:30"],
+            "Before breakfast", rx2_date, 2, "verified")
+        med("med-calcium", "doc-rx-nov25", "Calcium carbonate", "500 mg", "Once daily", ["14:00"],
+            "After lunch", rx2_date, 15, "verified")
+        med("med-vitd", "doc-rx-nov25", "Vitamin D3", "60,000 IU", "Once a week (Sunday)", ["SUN 09:00"],
+            "After breakfast", rx2_date, 21, "reminders_active")
+
+        # Already-active reminders + a week of self-reported adherence (Telmisartan)
+        now_l = datetime.now(TZ)
+        today8 = datetime.combine(now_l.date(), time(8, 0), TZ)
+        for d_off, st in ((6, "taken"), (5, "taken"), (4, "skipped"), (3, "taken"), (2, "taken"), (1, "taken")):
+            s.add(Reminder(patient_id=PATIENT_ID, kind="medication", ref_id="med-telmisartan", title="Telmisartan 40 mg",
+                           body="Morning, with or without food", due_at=today8 - timedelta(days=d_off), status=st))
+        if today8 <= now_l:
+            s.add(Reminder(patient_id=PATIENT_ID, kind="medication", ref_id="med-telmisartan", title="Telmisartan 40 mg",
+                           body="Morning, with or without food", due_at=today8, status="taken"))
+            nxt = today8 + timedelta(days=1)
+        else:
+            nxt = today8
+        s.add(Reminder(patient_id=PATIENT_ID, kind="medication", ref_id="med-telmisartan", title="Telmisartan 40 mg",
+                       body="Morning, with or without food", due_at=nxt, recurrence="daily"))
+        days_to_sun = (6 - now_l.weekday()) % 7
+        sun9 = datetime.combine(now_l.date() + timedelta(days=days_to_sun), time(9, 0), TZ)
+        if sun9 <= now_l:
+            sun9 += timedelta(days=7)
+        s.add(Reminder(patient_id=PATIENT_ID, kind="medication", ref_id="med-vitd", title="Vitamin D3 60,000 IU",
+                       body="Weekly dose, after breakfast", due_at=sun9, recurrence="weekly"))
 
         # Clinician-documented follow-ups (from the 11 May consultation summary)
         s.add(Reminder(patient_id=PATIENT_ID, kind="follow_up", ref_id="doc-note-may", title="Repeat HbA1c and lipid profile",

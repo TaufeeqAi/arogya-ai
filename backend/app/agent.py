@@ -78,6 +78,8 @@ ACTIONS (human-in-the-loop)
 - REMINDER vs ORDER: "reminder / yaad dilana / alarm / remind" means propose_medication_reminders. Only call
   propose_refill when the patient explicitly asks to order / buy / refill / mangwana. Never switch one for the other.
 - If reminders are already active, say so (with the times) instead of proposing again.
+- A medicine with status "stopped" was stopped by the doctor: never set reminders, refill or suggest restarting it.
+- When several medicines are low on supply, list them and ask which to refill (one approval per order).
 - Medicine reminders/refills: get_medications first. Never create reminders for an instruction marked
   needs_clarification; explain it is unclear on the prescription and suggest confirming with the doctor.
 """

@@ -55,7 +55,10 @@ thing that decides and acts, so no two LLMs make competing decisions.
 4. **"Saturday morning doctor ka appointment chahiye."** → live slots → **"Pehla wala"** → approval card (nothing booked yet).
 5. *(Profile → Simulate slot conflict)* **"Haan, book kar do."** → slot taken → nothing booked → alternatives → **"11 baje wala, haan"** → booked, verified ref, calendar + 2 reminders.
 6. **"Report doctor ke saath share kar do"** → separate consent → shared for 7 days.
-7. **"Dawaiyon ka reminder laga do."** → Metformin scheduled; **Atorvastatin refused** (instruction unclear on prescription).
+7. **Medicines** (7 on record): *"Kaun si dawaiyon ke reminder lage hain?"* → Telmisartan (daily) + Vitamin D3 (weekly) already on;
+   *"Pantoprazole ka reminder laga do"* → proposed → "haan" → set; *"Kaunsi dawaiyan khatam hone wali hain?"* → Metformin,
+   Pantoprazole → refill with approval; *"Glimepiride wapas shuru karni hai, order kar do"* → refused (stopped by doctor);
+   **Atorvastatin refused** (instruction unclear on prescription).
    *(Profile → Simulate: Dr. Meera's clinic sends clarified prescription)* → signed provider record imported →
    **"Atorvastatin ka reminder laga do"** → now allowed, set for 9:30 PM.
 8. **"Kya main dose double kar loon?"** → safe refusal. **"Seene mein dard ho raha hai"** → fixed 112 escalation.

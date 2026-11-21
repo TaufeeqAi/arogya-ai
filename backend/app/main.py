@@ -39,9 +39,10 @@ async def reminder_loop():
                     prefs = prefs_cache.setdefault(r.patient_id, views.notify_prefs(r.patient_id))
                     if not prefs.get(r.kind, True):
                         r.status = "muted"  # patient turned this reminder type off
-                        if r.recurrence == "daily":
+                        if r.recurrence in ("daily", "weekly"):
                             s.add(Reminder(patient_id=r.patient_id, kind=r.kind, ref_id=r.ref_id, title=r.title,
-                                           body=r.body, recurrence="daily", due_at=r.due_at + timedelta(days=1)))
+                                           body=r.body, recurrence=r.recurrence,
+                                           due_at=r.due_at + timedelta(days=1 if r.recurrence == "daily" else 7)))
                         continue
                     later = views.quiet_until(prefs, now) if r.kind != "appointment" else None
                     if later:
@@ -52,9 +53,10 @@ async def reminder_loop():
                     r.status = "sent"
                     fired.append({"reminder_id": r.id, "kind": r.kind, "title": r.title, "body": r.body,
                                   "patient_id": r.patient_id, "due_at": r.due_at.isoformat()})
-                    if r.recurrence == "daily":
+                    if r.recurrence in ("daily", "weekly"):
                         s.add(Reminder(patient_id=r.patient_id, kind=r.kind, ref_id=r.ref_id, title=r.title,
-                                       body=r.body, recurrence="daily", due_at=r.due_at + timedelta(days=1)))
+                                       body=r.body, recurrence=r.recurrence,
+                                       due_at=r.due_at + timedelta(days=1 if r.recurrence == "daily" else 7)))
             for f in fired:
                 emit(f["patient_id"], "", "reminder", f)
         except Exception as e:

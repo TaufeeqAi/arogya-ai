@@ -268,23 +268,36 @@ def _med_reminders(patient_id: str, session_id: str, p: dict, approval_id: str) 
         m = s.get(Medication, p["medication_id"])
         if not m or m.patient_id != patient_id:
             raise ActionError("NOT_FOUND", "Medication not found")
+        if m.status == "stopped":
+            raise ActionError("STOPPED_MEDICATION", "This medicine was stopped by the doctor")
         if m.status not in ("verified", "reminders_active") or not m.times:
             raise ActionError("UNVERIFIED_INSTRUCTION", "Instructions incomplete; cannot schedule reminders")
         now_l = datetime.now(TZ)
         created = []
+        days = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
+        recurrences = set()
         for t in m.times:
+            wd = None
+            if " " in t:  # weekly: "SUN 09:00"
+                wd, t = t.split(" ", 1)
             hh, mm = map(int, t.split(":"))
             due = now_l.replace(hour=hh, minute=mm, second=0, microsecond=0)
-            if due <= now_l:
+            if wd:
+                due += timedelta(days=(days[wd] - now_l.weekday()) % 7)
+                if due <= now_l:
+                    due += timedelta(days=7)
+            elif due <= now_l:
                 due += timedelta(days=1)
-            s.add(Reminder(patient_id=patient_id, kind="medication", ref_id=m.id, recurrence="daily",
+            rec = "weekly" if wd else "daily"
+            recurrences.add(rec)
+            s.add(Reminder(patient_id=patient_id, kind="medication", ref_id=m.id, recurrence=rec,
                            title=f"{m.name} {m.strength}", body=m.instructions, due_at=due))
-            created.append(due.strftime("%I:%M %p"))
+            created.append(due.strftime("%a %I:%M %p") if wd else due.strftime("%I:%M %p"))
         m.status = "reminders_active"
         name = f"{m.name} {m.strength}"
     activity(patient_id, session_id, "Daily medication reminders scheduled", "done", f"{name} at {', '.join(created)}",
              "schedule_reminders")
-    result = {"medication": name, "times": created, "recurrence": "daily"}
+    result = {"medication": name, "times": created, "recurrence": ", ".join(sorted(recurrences))}
     ui(patient_id, session_id, "medication_schedule", {"medications": medications_view(patient_id), "highlight": p["medication_id"]})
     return result
 
@@ -373,10 +386,24 @@ def medications_view(patient_id: str) -> list[dict]:
     with session() as s:
         meds = list(s.scalars(select(Medication).where(Medication.patient_id == patient_id)))
         out = []
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         for m in meds:
             doc = s.get(Document, m.document_id)
+            nxt = s.scalars(select(Reminder).where(Reminder.ref_id == m.id, Reminder.status == "scheduled")
+                            .order_by(Reminder.due_at)).first()
+            order = s.scalars(select(PharmacyOrder).where(PharmacyOrder.medication_id == m.id,
+                                                          PharmacyOrder.status != "cancelled")
+                              .order_by(PharmacyOrder.created_at.desc())).first()
+            logs = list(s.scalars(select(Reminder).where(Reminder.ref_id == m.id, Reminder.due_at >= week_ago,
+                                                         Reminder.status.in_(("taken", "skipped")))))
             out.append({"medication_id": m.id, "name": m.name, "strength": m.strength, "frequency": m.frequency,
                         "times": m.times, "instructions": m.instructions, "status": m.status,
                         "supply_left_days": m.supply_left_days,
+                        "next_dose": fmt_dt(nxt.due_at) if nxt else None,
+                        "refill_order": order.order_ref if order else None,
+                        "adherence_7d": {"taken": sum(l.status == "taken" for l in logs),
+                                         "skipped": sum(l.status == "skipped" for l in logs)} if logs else None,
                         "source": {"document_id": m.document_id, "title": doc.title, "trust_label": doc.trust_label}})
+        rank = {"reminders_active": 0, "verified": 1, "needs_clarification": 2, "stopped": 3}
+        out.sort(key=lambda x: rank.get(x["status"], 9))
         return out

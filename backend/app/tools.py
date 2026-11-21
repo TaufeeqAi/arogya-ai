@@ -251,8 +251,9 @@ def propose_record_share(config: RunnableConfig, appointment_id: str, document_i
 
 @tool
 def get_medications(config: RunnableConfig) -> dict:
-    """List the patient's recorded medicines with instructions exactly as documented, verification status,
-    remaining supply and source prescription. Shows the medication card."""
+    """List the patient's medicines with instructions exactly as documented, status (reminders_active /
+    verified / needs_clarification / stopped), next reminder, 7-day self-reported adherence, remaining supply and
+    source prescription. Shows the medication card."""
     pid, sid = _ctx(config)
     meds = actions.medications_view(pid)
     activity(pid, sid, "Retrieved medication record", "done", f"{len(meds)} medicines", "get_medications")
@@ -269,6 +270,9 @@ def propose_medication_reminders(config: RunnableConfig, medication_id: str) -> 
         m = s.get(Medication, medication_id)
         if not m or m.patient_id != pid:
             return {"ok": False, "error": "NOT_FOUND"}
+        if m.status == "stopped":
+            return {"ok": False, "error": "STOPPED_MEDICATION",
+                    "message": f"{m.name} was stopped by the doctor; no reminders. Ask your doctor before restarting."}
         if m.status == "reminders_active":
             return {"ok": True, "status": "already_active", "medication": f"{m.name} {m.strength}", "times": m.times,
                     "message": "Daily reminders are already active for this medicine; nothing to change."}
@@ -278,8 +282,9 @@ def propose_medication_reminders(config: RunnableConfig, medication_id: str) -> 
             return {"ok": False, "error": "UNVERIFIED_INSTRUCTION",
                     "message": f"{m.name}: '{m.instructions}'. Cannot create reminders; ask the prescribing doctor or pharmacist."}
         payload = {"medication_id": m.id, "times": m.times}
-        lines = [f"{m.name} {m.strength} · {m.frequency}", f"Daily at {', '.join(m.times)}", m.instructions,
-                 "Source: prescription on record"]
+        weekly = any(" " in t for t in m.times)
+        when = f"Every {m.times[0].split(' ')[0].title()} at {m.times[0].split(' ')[1]}" if weekly else f"Daily at {', '.join(m.times)}"
+        lines = [f"{m.name} {m.strength} · {m.frequency}", when, m.instructions, "Source: prescription on record"]
     a = actions.create_approval(pid, sid, "medication_reminders", payload, {"title": "Set medicine reminders", "lines": lines})
     return {"ok": True, "approval_id": a.id, "status": "awaiting_patient_approval"}
 
@@ -293,13 +298,21 @@ def propose_refill(config: RunnableConfig, medication_id: str) -> dict:
         m = s.get(Medication, medication_id)
         if not m or m.patient_id != pid:
             return {"ok": False, "error": "NOT_FOUND"}
+        if m.status == "stopped":
+            return {"ok": False, "error": "STOPPED_MEDICATION",
+                    "message": f"{m.name} was stopped by the doctor. It cannot be reordered without a new prescription."}
         if m.status == "needs_clarification":
             return {"ok": False, "error": "UNVERIFIED_INSTRUCTION", "message": "Prescription unclear; pharmacist/doctor must verify."}
-    qty = 60
-    payload = {"medication_id": m.id, "item": f"{m.name} {m.strength} tablets", "quantity": qty,
-               "pharmacy": "Sanjeevani Pharmacy (sandbox)", "price_inr": 84, "delivery": "Tomorrow, 10 AM - 1 PM",
+        weekly = any(" " in t for t in (m.times or []))
+        per_day = max(1, len(m.times or [])) if not weekly else 0
+        qty = 4 if weekly else 30 * per_day
+        unit = "capsules" if "D3" in m.name else "tablets"
+        price = {"Metformin": 84, "Pantoprazole": 120, "Telmisartan": 95, "Calcium carbonate": 110,
+                 "Vitamin D3": 130}.get(m.name, 100)
+    payload = {"medication_id": m.id, "item": f"{m.name} {m.strength} {unit}", "quantity": qty,
+               "pharmacy": "Sanjeevani Pharmacy (sandbox)", "price_inr": price, "delivery": "Tomorrow, 10 AM - 1 PM",
                "payment": "Cash on delivery (sandbox)"}
-    activity(pid, sid, "Checked pharmacy stock & price", "done", f"{payload['item']} · in stock · ₹84", "get_pharmacy_quote")
+    activity(pid, sid, "Checked pharmacy stock & price", "done", f"{payload['item']} · in stock · ₹{price}", "get_pharmacy_quote")
     a = actions.create_approval(pid, sid, "refill_order", payload, {
         "title": "Order medicine refill", "lines": [f"{payload['item']} × {qty}", payload["pharmacy"],
                                                      f"₹{payload['price_inr']} · {payload['payment']}", payload["delivery"],

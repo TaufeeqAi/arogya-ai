@@ -261,37 +261,66 @@ function ShareConfirmation({ p }: { p: any }) {
   );
 }
 
-function Medication({ p }: { p: any }) {
+const MED_GROUPS: [string, string][] = [
+  ['reminders_active', 'Reminders on'],
+  ['verified', 'No reminders yet'],
+  ['needs_clarification', 'Needs clarification'],
+  ['stopped', 'Stopped by your doctor'],
+];
+
+function Medication({ p, ctx }: { p: any; ctx?: GenCtx }) {
+  const meds: any[] = p.medications || [];
+  const say = (q: string) => ctx?.say(q);
   return (
     <Card tone="info">
-      <Text style={font.tiny}>MEDICINES ON RECORD</Text>
-      {p.medications.map((m: any) => {
-        const unclear = m.status === 'needs_clarification';
+      <Text style={font.tiny}>MEDICINES ON RECORD · {meds.filter((m) => m.status !== 'stopped').length} ACTIVE</Text>
+      {MED_GROUPS.map(([status, title]) => {
+        const group = meds.filter((m) => m.status === status);
+        if (!group.length) return null;
         return (
-          <View key={m.medication_id} style={[st.obs, p.highlight === m.medication_id && { backgroundColor: C.okSoft, borderRadius: 10, padding: 8 }]}>
-            <View style={st.row}>
-              <Text style={font.h3}>{m.name} {m.strength}</Text>
-              <Pill
-                text={unclear ? 'Needs clarification' : m.status === 'reminders_active' ? 'Reminders on' : m.source?.trust_label === 'provider_verified' ? 'Doctor verified' : 'From your prescription'}
-                tone={unclear ? 'danger' : m.status === 'reminders_active' ? 'ok' : 'primary'}
-              />
-            </View>
-            <Text style={font.small}>{m.frequency || 'Frequency not on source'} · {m.instructions}</Text>
-            {m.times?.length ? (
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                {m.times.map((t: string) => (
-                  <Pill key={t} text={`⏰ ${t}`} tone="neutral" />
-                ))}
-              </View>
-            ) : null}
-            {m.supply_left_days <= 5 && !unclear ? <Text style={[font.small, { color: C.danger, marginTop: 4 }]}>Only ~{m.supply_left_days} days of supply left</Text> : null}
-            <View style={{ marginTop: 4 }}>
-              <SourceChip documentId={m.source.document_id} title={m.source.title} />
-            </View>
+          <View key={status} style={{ marginTop: 10 }}>
+            <Text style={[font.small, { fontWeight: '800', color: status === 'needs_clarification' ? C.danger : status === 'stopped' ? C.muted : C.primaryDark }]}>
+              {title.toUpperCase()}
+            </Text>
+            {group.map((m: any) => {
+              const unclear = m.status === 'needs_clarification';
+              const stopped = m.status === 'stopped';
+              const low = !unclear && !stopped && m.supply_left_days <= 5 && !m.refill_order;
+              const label = stopped ? 'Stopped' : unclear ? 'Needs clarification' : m.status === 'reminders_active' ? 'Reminders on'
+                : m.source?.trust_label === 'provider_verified' ? 'Doctor verified' : 'From your prescription';
+              return (
+                <View key={m.medication_id} style={[st.obs, p.highlight === m.medication_id && { backgroundColor: C.okSoft, borderRadius: 10, padding: 8 }, stopped && { opacity: 0.7 }]}>
+                  <View style={st.row}>
+                    <Text style={[font.h3, stopped && { textDecorationLine: 'line-through' }]}>💊 {m.name} {m.strength}</Text>
+                    <Pill text={label} tone={unclear ? 'danger' : stopped ? 'neutral' : m.status === 'reminders_active' ? 'ok' : 'primary'} />
+                  </View>
+                  <Text style={font.small}>{m.frequency || 'Frequency not on source'} · {m.instructions}</Text>
+                  {m.times?.length && !stopped ? (
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                      {m.times.map((t: string) => <Pill key={t} text={`⏰ ${t}`} tone="neutral" />)}
+                      {m.next_dose ? <Pill text={`Next: ${m.next_dose}`} tone="info" /> : null}
+                    </View>
+                  ) : null}
+                  {m.adherence_7d ? (
+                    <Text style={[font.small, { marginTop: 4 }]}>
+                      Last 7 days: {m.adherence_7d.taken} taken · {m.adherence_7d.skipped} skipped <Text style={font.tiny}>(self-reported)</Text>
+                    </Text>
+                  ) : null}
+                  {low ? <Text style={[font.small, { color: C.danger, marginTop: 4, fontWeight: '700' }]}>Only ~{m.supply_left_days} days of supply left</Text> : null}
+                  {m.refill_order ? <Text style={[font.small, { color: C.ok, marginTop: 4, fontWeight: '700' }]}>📦 Refill on the way · {m.refill_order}</Text> : null}
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <SourceChip documentId={m.source.document_id} title={m.source.title} />
+                    {ctx && m.status === 'verified' ? <Btn small kind="soft" title="⏰ Set reminder" onPress={() => say(`${m.name} ka reminder laga do`)} /> : null}
+                    {ctx && !unclear && !stopped && !m.refill_order && (low || m.status === 'reminders_active') ? <Btn small kind="soft" title="📦 Refill" onPress={() => say(`${m.name} ka refill order kar do`)} /> : null}
+                    {ctx && unclear ? <Btn small kind="soft" title="Ask doctor" onPress={() => say(`${m.name} ki dose doctor se confirm karni hai, appointment chahiye`)} /> : null}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         );
       })}
-      <Text style={[font.tiny, { marginTop: 6 }]}>Aarogya never changes doses. Unclear instructions must be confirmed by your doctor or pharmacist.</Text>
+      <Text style={[font.tiny, { marginTop: 8 }]}>Aarogya never changes doses or restarts stopped medicines. Unclear instructions must be confirmed by your doctor or pharmacist.</Text>
     </Card>
   );
 }
@@ -526,7 +555,7 @@ function GenUIInner({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
       case 'approval_card': return <Approval p={p} ctx={ctx} />;
       case 'booking_confirmation': return <BookingConfirmation p={p} />;
       case 'share_confirmation': return <ShareConfirmation p={p} />;
-      case 'medication_schedule': return <Medication p={p} />;
+      case 'medication_schedule': return <Medication p={p} ctx={ctx} />;
       case 'doctor_brief': return <DoctorBrief p={p} />;
       case 'order_confirmation': return <Order p={p} />;
       case 'emergency': return <Emergency />;

@@ -94,7 +94,10 @@ def home(patient_id: str) -> dict:
                  "trust_label": d.trust_label}
                 for d in s.scalars(select(Document).where(Document.patient_id == patient_id).order_by(Document.created_at.desc()).limit(3))]
         low = [{"name": m.name, "strength": m.strength, "days": m.supply_left_days}
-               for m in s.scalars(select(Medication).where(Medication.patient_id == patient_id)) if m.supply_left_days <= 5]
+               for m in s.scalars(select(Medication).where(Medication.patient_id == patient_id))
+               if m.supply_left_days <= 5 and m.status in ("verified", "reminders_active")
+               and not s.scalars(select(PharmacyOrder).where(PharmacyOrder.medication_id == m.id,
+                                                             PharmacyOrder.status != "cancelled")).first()]
     from .tools import care_plan
     plan = [t for t in care_plan(patient_id) if t["status"] in ("open", "overdue")]
     cmp = memory.compare(patient_id)["comparisons"]
