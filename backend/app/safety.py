@@ -91,10 +91,14 @@ def check_output(text: str) -> tuple[bool, str]:
 
 
 AFFIRM_WORDS = {"haan", "han", "haa", "ha", "haanji", "hanji", "ji", "yes", "yeah", "yep", "ok", "okay", "sure",
-                "confirm", "confirmed", "bilkul", "kardo", "हाँ", "हां", "हा", "जी", "बिल्कुल", "ओके"}
+                "confirm", "confirmed", "bilkul", "kardo", "हाँ", "हां", "हा", "जी", "बिल्कुल", "ओके",
+                # English as written by the hi-IN speech recogniser
+                "यस", "येस", "यप", "ओक", "ओकेय", "श्योर", "शुअर", "कन्फर्म", "कंफर्म", "ऑलराइट", "प्रोसीड"}
 AFFIRM_PHRASES = ["kar do", "kar dijiye", "kar dijie", "kar dena", "kar dein", "kar de", "go ahead", "please do",
-                  "कर दो", "कर दीजिए", "कर दें", "कर दे"]
-DENY_WORDS = {"nahi", "nahin", "na", "no", "mat", "cancel", "ruko", "stop", "dont", "don't", "नहीं", "नही", "मत", "रुको"}
+                  "book it", "book this", "do it", "please book", "कर दो", "कर दीजिए", "कर दें", "कर दे",
+                  "गो अहेड", "बुक इट", "बुक दिस", "प्लीज़ बुक", "प्लीज बुक", "डू इट"]
+DENY_WORDS = {"nahi", "nahin", "na", "no", "mat", "cancel", "ruko", "stop", "dont", "don't", "नहीं", "नही", "मत", "रुको",
+              "नो", "डोंट", "कैंसल", "कैन्सल", "स्टॉप", "वेट"}
 
 
 def _tokens(text: str) -> list[str]:

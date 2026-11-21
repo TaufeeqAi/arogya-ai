@@ -126,6 +126,7 @@ def check_slots(config: RunnableConfig, doctor_id: str, date_iso: str, part_of_d
     """Get currently open appointment slots for one doctor on a date (YYYY-MM-DD).
     part_of_day: morning (before 1 PM) | afternoon | evening | any. Shows slot cards on screen."""
     pid, sid = _ctx(config)
+    actions.expire_pending(pid, sid, "book_appointment", "patient is looking at other slots")
     try:
         day = date.fromisoformat(date_iso)
     except ValueError:
@@ -177,7 +178,8 @@ def propose_appointment(config: RunnableConfig, slot_id: str) -> dict:
 def confirm_action(config: RunnableConfig, approval_id: str = "") -> dict:
     """Execute a pending approved action ONLY after the patient has explicitly said yes (e.g. 'haan', 'yes',
     'book kar do') to that exact proposal in their latest message. Leave approval_id empty to use the latest
-    pending approval. Returns verified outcome or an error with alternatives."""
+    pending approval. If it returns NO_PENDING_APPROVAL, call propose_appointment for the slot the patient
+    chose and ask them to confirm. Returns verified outcome or an error with alternatives."""
     pid, sid = _ctx(config)
     c = config.get("configurable", {})
     a = actions.latest_pending(pid) if not approval_id else actions.get_approval(pid, approval_id)
@@ -201,7 +203,8 @@ def confirm_action(config: RunnableConfig, approval_id: str = "") -> dict:
 
 @tool
 def cancel_pending_action(config: RunnableConfig, approval_id: str = "") -> dict:
-    """Cancel the pending proposal when the patient says no or changes their mind."""
+    """Cancel the pending proposal when the patient says no, rejects the offered slot/time, or changes their mind.
+    ALWAYS call this before searching alternatives after the patient rejects a proposal."""
     pid, sid = _ctx(config)
     a = actions.latest_pending(pid) if not approval_id else None
     return actions.reject(pid, sid, approval_id or (a.id if a else ""))

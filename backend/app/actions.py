@@ -51,6 +51,20 @@ def create_approval(patient_id: str, session_id: str, action: str, payload: dict
     return a
 
 
+def expire_pending(patient_id: str, session_id: str, action: str, reason: str) -> int:
+    with session() as s:
+        stale = list(s.scalars(select(Approval).where(Approval.patient_id == patient_id, Approval.action == action,
+                                                      Approval.status == "pending")))
+        for a in stale:
+            a.status = "expired"
+        ids = [a.id for a in stale]
+    for i in ids:
+        emit(patient_id, session_id, "approval_resolved", {"approval_id": i, "status": "expired"})
+    if ids:
+        activity(patient_id, session_id, "Previous proposal withdrawn", "done", reason, "expire_approval")
+    return len(ids)
+
+
 def get_approval(patient_id: str, approval_id: str) -> Approval | None:
     with session() as s:
         a = s.get(Approval, approval_id)
