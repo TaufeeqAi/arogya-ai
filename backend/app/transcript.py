@@ -71,7 +71,7 @@ async def normalize(text: str) -> str:
     t0 = time.perf_counter()
     try:
         client = genai.Client(api_key=S.llm_api_key)
-        for model in ("gemini-3.1-flash-lite", "gemini-flash-lite-latest", S.llm_model):
+        for model in ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", S.llm_model):
             try:
                 r = await client.aio.models.generate_content(
                     model=model, contents=PROMPT + text,

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "gpt-4.1-mini"
     llm_temperature: float = 0.2
-    llm_fallback_models: str = "gemini-3.1-flash-lite,gemini-flash-lite-latest"
+    llm_fallback_models: str = "gemini-3.5-flash-lite,gemini-3.5-flash"
     llm_thinking: str = "minimal"  # Gemini 3+: minimal | low | medium | high
 
     # Agora
