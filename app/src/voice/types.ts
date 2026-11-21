@@ -12,4 +12,5 @@ export type VoiceHandlers = {
   onAgentLeft?: () => void;
   onLevels?: (l: { agent: number; me: number }) => void;
   onState?: (s: string) => void;
+  onMicOpen?: () => void;
 };

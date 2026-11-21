@@ -19,6 +19,7 @@ type Store = {
   voice: VoiceState;
   voiceError: string;
   levels: { agent: number; me: number };
+  micOpen: boolean;
   reminder: any | null;
   dismissReminder: () => void;
   send: (text: string) => Promise<void>;
@@ -47,6 +48,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [voice, setVoice] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState('');
   const [levels, setLevels] = useState({ agent: 0, me: 0 });
+  const [micOpen, setMicOpen] = useState(false);
   const [reminder, setReminder] = useState<any | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [lastExtraction, setLastExtraction] = useState<UIItem | null>(null);
@@ -122,7 +124,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setVoiceError('');
     try {
       const s = await post('/api/voice/start', { session_id: sidRef.current });
-      leaveRef.current = await joinVoice(s, { onLevels: setLevels, onAgentLeft: () => setLevels({ agent: 0, me: 0 }) });
+      setMicOpen(false);
+      leaveRef.current = await joinVoice(s, {
+        onLevels: setLevels,
+        onAgentLeft: () => setLevels({ agent: 0, me: 0 }),
+        onMicOpen: () => setMicOpen(true),
+      });
       setVoice('live');
     } catch (e: any) {
       setVoice('error');
@@ -142,7 +149,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider
       value={{
-        sessionId, feed, activity, approvals, thinking, connected, voice, voiceError, levels, reminder,
+        sessionId, feed, activity, approvals, thinking, connected, voice, voiceError, levels, micOpen, reminder,
         dismissReminder: () => setReminder(null), send, decide, startVoice, stopVoice,
         clearFeed: () => setFeed([]), dataVersion, lastExtraction,
         reconnectServer: () => setReconnect((n) => n + 1),

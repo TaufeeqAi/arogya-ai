@@ -12,7 +12,7 @@ const SUGGESTIONS = [
 ];
 
 function Orb() {
-  const { voice, levels, startVoice, stopVoice, thinking } = useStore();
+  const { voice, levels, startVoice, stopVoice, thinking, micOpen } = useStore();
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -28,7 +28,7 @@ function Orb() {
   const listening = voice === 'live' && levels.me > 4;
   const live = voice === 'live';
   const label =
-    voice === 'connecting' ? 'Connecting…' : voice === 'error' ? 'Tap to retry' : !live ? 'Tap to talk' : speaking ? 'Aarogya is speaking' : thinking ? 'Thinking…' : listening ? 'Listening…' : 'Listening — speak naturally';
+    voice === 'connecting' ? 'Connecting…' : voice === 'error' ? 'Tap to retry' : !live ? 'Tap to talk' : speaking ? (micOpen ? 'Aarogya is speaking' : 'Aarogya is greeting you… mic opens next') : !micOpen ? 'Connecting voice…' : thinking ? 'Thinking…' : listening ? 'Listening…' : 'Listening — speak naturally';
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, live ? 1.12 + Math.min(levels.agent, 60) / 200 : 1.04] });
   return (
     <View style={{ alignItems: 'center' }}>

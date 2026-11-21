@@ -31,9 +31,17 @@ def _tokens(text: str) -> list[str]:
     return [t for t in re.split(r"[\s,.!?;:।॥\"()\-–—]+", text) if t]
 
 
+_LATIN_HI = {"haan", "han", "nahi", "nahin", "kar", "karo", "do", "hai", "hain", "mera", "meri", "mujhe", "kya", "wala",
+             "wali", "ji", "aur", "ka", "ki", "ke", "ko", "se", "mein", "bhi", "batao", "dikhao", "samjhao", "chahiye"}
+
+
 def english_signal(text: str) -> tuple[int, int]:
+    """(english, hindi) word counts. English may arrive in Devanagari (transliterated) or Latin script."""
     toks = _tokens(text)
-    return sum(t in DEV_EN for t in toks), sum(t in DEV_HI for t in toks)
+    latin = [t.lower() for t in toks if re.fullmatch(r"[A-Za-z']+", t)]
+    en = sum(t in DEV_EN for t in toks) + sum(t not in _LATIN_HI for t in latin)
+    hi = sum(t in DEV_HI for t in toks) + sum(t in _LATIN_HI for t in latin)
+    return en, hi
 
 
 def needs_normalization(text: str) -> bool:
