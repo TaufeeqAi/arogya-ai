@@ -11,7 +11,7 @@ EMERGENCY_PATTERNS = [
     r"breathless", r"short(ness)? of breath",
     r"unconscious", r"behosh", r"बेहोश", r"stroke", r"lakwa", r"लकवा", r"face drooping",
     r"suicid", r"khud ?kushi", r"आत्महत्या", r"mar jaana chahti", r"kill myself",
-    r"heavy bleeding", r"bahut khoon", r"बहुत खून", r"seizure", r"daura pad", r"दौरा",
+    r"heavy bleeding", r"bahut khoon", r"बहुत खून", r"seizure", r"daura pad", r"daure pad", r"दौरा पड़", r"दौरे पड़",
     r"overdose", r"zyada goli", r"ज़्यादा गोली", r"([4-9]|\d{2,})\s*(goli|goliyan|goliyaan|tablets|pills)",
     r"(goli|goliyan|goliyaan|tablets|pills).{0,25}(ek saath|ek sath|at once|together|kha li|kha liye|le li)",
     r"too many (pills|tablets)", r"zeh(e)?r", r"poison", r"ज़हर", r"गोलियां.{0,20}(खा ली|एक साथ)",

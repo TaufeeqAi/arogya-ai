@@ -122,7 +122,7 @@ async def guard_input(state: State, config) -> dict:
 def text_of(content) -> str:
     """Gemini returns content as parts (text + thought signature); keep only the spoken text."""
     if isinstance(content, list):
-        return " ".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content).strip()
+        return "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content).strip()
     return str(content or "").strip()
 
 
@@ -141,7 +141,7 @@ async def call_agent(state: State, config) -> dict:
                       and not str(m.content).startswith("[App event")), "")
     rl = config.get("configurable", {}).get("reply_lang") or safety.reply_language(last_user)
     lang_rule = {"english": "ENGLISH. The patient wrote in English, so reply ONLY in natural English.",
-                 "devanagari": "HINDI in Devanagari script (keep test names and numbers in English). Use feminine first person.",
+                 "devanagari": "HINDI in Devanagari script. Write months, weekdays and time-of-day in Hindi (18 नवंबर, शनिवार, शाम 5:30 बजे); keep test names like HbA1c in English. Use feminine first person.",
                  "hinglish": "ROMAN HINGLISH (Hindi written in Latin script). Use feminine first person."}[rl]
     tag = {"english": "[Reply in English]", "devanagari": "[हिंदी (देवनागरी) में जवाब दें]",
            "hinglish": "[Reply in Roman Hinglish]"}[rl]

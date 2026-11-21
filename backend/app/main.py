@@ -172,9 +172,9 @@ async def agora_llm(session_id: str, request: Request):
             yield _chunk(FILLER[turn_language(text)])
         reply = await task
         # speak a TTS-safe version; chunk only at sentence boundaries so numbers are never split
-        from .speech import sentences, speakable
+        from .speech import localize, sentences, speakable
         for sent in sentences(speakable(reply)):
-            yield _chunk(sent + " ")
+            yield _chunk(localize(sent) + " ")
         yield _chunk(None, finish="stop")
         yield "data: [DONE]\n\n"
 

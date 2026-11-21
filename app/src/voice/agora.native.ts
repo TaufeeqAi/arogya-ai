@@ -1,5 +1,6 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import {
+  AudioScenarioType,
   ChannelProfileType,
   ClientRoleType,
   createAgoraRtcEngine,
@@ -22,7 +23,13 @@ export async function joinVoice(s: VoiceSession, h: VoiceHandlers): Promise<() =
 
   if (!engine) {
     engine = createAgoraRtcEngine();
-    engine.initialize({ appId: s.app_id, channelProfile: ChannelProfileType.ChannelProfileCommunication });
+    // AI dialogue scenario: Agora's echo cancellation / noise suppression tuned for Conversational AI, so the
+    // agent's own voice from the phone speaker isn't treated as the user interrupting.
+    engine.initialize({
+      appId: s.app_id,
+      channelProfile: ChannelProfileType.ChannelProfileCommunication,
+      audioScenario: AudioScenarioType.AudioScenarioAiClient,
+    });
   }
   const e = engine;
 
@@ -47,6 +54,7 @@ export async function joinVoice(s: VoiceSession, h: VoiceHandlers): Promise<() =
   };
   e.registerEventHandler(handler);
   e.enableAudio();
+  e.setAudioScenario(AudioScenarioType.AudioScenarioAiClient);
   e.setDefaultAudioRouteToSpeakerphone(true);
   e.enableAudioVolumeIndication(200, 3, true);
   e.joinChannel(s.token ?? '', s.channel, s.uid, {

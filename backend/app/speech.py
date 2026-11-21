@@ -39,6 +39,14 @@ def speakable(text: str) -> str:
 ABBREV = ("dr.", "mr.", "mrs.", "ms.", "st.", "vs.", "e.g.", "i.e.", "no.", "approx.", "ref.")
 
 
+def localize(sentence: str) -> str:
+    """Devanagari sentences get Hindi spoken numbers/dates/times; English & Roman Hinglish stay as-is."""
+    if re.search(r"[ऀ-ॿ]", sentence):
+        from .speech_hi import hindi_spoken
+        return hindi_spoken(sentence)
+    return sentence
+
+
 def sentences(text: str) -> list[str]:
     """Split only at sentence ends followed by whitespace (decimals/times stay intact; 'Dr.' never splits)."""
     parts = [p.strip() for p in re.split(r"(?<=[.!?।])\s+", text) if p.strip()]
