@@ -152,7 +152,9 @@ async def call_agent(state: State, config) -> dict:
         if isinstance(m, HumanMessage) and not str(m.content).startswith("[App event"):
             window = window[:i] + [HumanMessage(content=str(m.content) + "  " + tag)] + window[i + 1:]
             break
-    msgs = [SystemMessage(content=system_prompt(lang_rule))] + window
+    voice_rule = (" VOICE CALL: this reply is spoken aloud. Maximum 2 short sentences and at most 2 numbers. "
+                  "Never list all values; the screen card shows the details.") if config.get("configurable", {}).get("channel") == "voice" else ""
+    msgs = [SystemMessage(content=system_prompt(lang_rule) + voice_rule)] + window
     resp = await llm.ainvoke(msgs, config)
     calls = [c["name"] for c in getattr(resp, "tool_calls", []) or []]
     print(f"LLM {sid} {time.perf_counter() - t0:.2f}s -> {calls or 'answer'}", flush=True)
@@ -213,7 +215,7 @@ async def run_turn(patient_id: str, session_id: str, text: str, channel: str = "
     user_emit = asyncio.create_task(_emit_user())
 
     config = {"configurable": {"thread_id": session_id, "patient_id": patient_id, "session_id": session_id,
-                               "language_hint": language_hint, "user_text": text, "reply_lang": rl,
+                               "language_hint": language_hint, "user_text": text, "reply_lang": rl, "channel": channel,
                                "turn_started": datetime.now(timezone.utc).isoformat()}, "recursion_limit": 25}
     try:
         out = await graph.ainvoke({"messages": [HumanMessage(content=text)]}, config)

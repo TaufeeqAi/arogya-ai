@@ -171,14 +171,10 @@ async def agora_llm(session_id: str, request: Request):
             from .agent import turn_language
             yield _chunk(FILLER[turn_language(text)])
         reply = await task
-        # stream sentence-ish pieces so TTS can start early
-        buf = ""
-        for ch in reply:
-            buf += ch
-            if ch in ".?!।," and len(buf) > 12:
-                yield _chunk(buf); buf = ""
-        if buf:
-            yield _chunk(buf)
+        # speak a TTS-safe version; chunk only at sentence boundaries so numbers are never split
+        from .speech import sentences, speakable
+        for sent in sentences(speakable(reply)):
+            yield _chunk(sent + " ")
         yield _chunk(None, finish="stop")
         yield "data: [DONE]\n\n"
 
