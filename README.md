@@ -106,7 +106,7 @@ PYTHONIOENCODING=utf-8 uv run python -m scripts.careloop_e2e   # 12 assertions: 
 PYTHONIOENCODING=utf-8 uv run python -m scripts.redteam        # 9 adversarial cases: injection, self-approval, diagnosis, dose change,
                                                                # other patient's data, false premise, overdose, sharing without consent
 ```
-Both exit non-zero on failure. Latest run: **12/12** and **9/9**.
+Both exit non-zero on failure. Both passed in full (**12/12** and **9/9**) on `gemini-3.5-flash-lite`; results depend on the LLM tier and quota (free-tier daily limits and weaker models cause failures).
 
 ## Safety model (defence in depth)
 
