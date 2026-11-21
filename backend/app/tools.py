@@ -114,9 +114,18 @@ def search_doctors(config: RunnableConfig, specialty: str = "", language: str = 
         if area and area.lower() not in d.area.lower():
             return False
         return True
-    found = [d for d in docs if match(d)] or [d for d in docs if not specialty or specialty.lower()[:5] in d.specialty.lower()] or docs
-    activity(pid, sid, "Searched doctor directory", "done", f"{len(found)} doctors match", "search_doctors")
-    return {"ok": True, "doctors": [{"doctor_id": d.id, "name": d.name, "specialty": d.specialty, "clinic": d.clinic,
+    found = [d for d in docs if match(d)]
+    relaxed = False
+    if not found:
+        found = [d for d in docs if not specialty or specialty.lower()[:5] in d.specialty.lower()]
+        relaxed = True
+    activity(pid, sid, "Searched doctor directory (demo network)", "done",
+             f"{len(found)} doctors" + (" (filters relaxed)" if relaxed else " match"), "search_doctors")
+    ui(pid, sid, "doctor_results", {"doctors": [{"id": d.id, "name": d.name, "specialty": d.specialty, "clinic": d.clinic,
+                                                  "area": d.area, "languages": d.languages, "fee": d.fee,
+                                                  "rating": d.rating} for d in found],
+                                    "note": "Filters relaxed: no exact match" if relaxed else ""})
+    return {"ok": True, "filters_relaxed": relaxed, "doctors": [{"doctor_id": d.id, "name": d.name, "specialty": d.specialty, "clinic": d.clinic,
                                      "area": d.area, "languages": d.languages, "fee_inr": d.fee, "rating": d.rating,
                                      "experience_years": d.experience_years} for d in found]}
 
@@ -169,8 +178,10 @@ def propose_appointment(config: RunnableConfig, slot_id: str) -> dict:
         payload = {"slot_id": sl.id, "doctor_id": d.id, "doctor_name": d.name, "clinic": d.clinic, "area": d.area,
                    "start": sl.start.isoformat(), "label": fmt_dt(sl.start), "fee": d.fee, "mode": sl.mode}
     a = actions.create_approval(pid, sid, "book_appointment", payload, {
-        "title": f"Book {d.name}", "lines": [f"{d.clinic}, {d.area}", payload["label"], f"Consultation fee ₹{d.fee}",
-                                             "In-person visit"]})
+        "title": f"Book {d.name}", "lines": [f"{d.clinic}, {d.area}", f"{payload['label']} IST (Asia/Kolkata)",
+                                             f"Consultation fee ₹{d.fee}",
+                                             "In-person visit" if sl.mode == "in_person" else "Video consultation",
+                                             "Demo clinic network (simulated)"]})
     return {"ok": True, "approval_id": a.id, "status": "awaiting_patient_approval", "proposal": payload}
 
 
@@ -207,11 +218,15 @@ def cancel_pending_action(config: RunnableConfig, approval_id: str = "") -> dict
     ALWAYS call this before searching alternatives after the patient rejects a proposal."""
     pid, sid = _ctx(config)
     a = actions.latest_pending(pid) if not approval_id else None
-    return actions.reject(pid, sid, approval_id or (a.id if a else ""))
+    target = approval_id or (a.id if a else "")
+    if not target:
+        return {"ok": True, "status": "nothing_pending"}
+    return actions.reject(pid, sid, target)
 
 
 @tool
-def propose_record_share(config: RunnableConfig, appointment_id: str, document_ids: list[str]) -> dict:
+def propose_record_share(config: RunnableConfig, appointment_id: str, document_ids: list[str],
+                         purpose: str = "Upcoming consultation") -> dict:
     """Prepare sharing specific documents with the doctor of a booked appointment. Requires separate patient
     consent (approval card). Does not share until confirm_action after the patient says yes."""
     pid, sid = _ctx(config)
@@ -223,9 +238,11 @@ def propose_record_share(config: RunnableConfig, appointment_id: str, document_i
         docs = [s.get(Document, x) for x in document_ids]
         if any(x is None or x.patient_id != pid for x in docs):
             return {"ok": False, "error": "DOCUMENT_NOT_FOUND"}
-    payload = {"doctor_id": d.id, "doctor_name": d.name, "appointment_id": appointment_id, "document_ids": document_ids}
+    payload = {"doctor_id": d.id, "doctor_name": d.name, "appointment_id": appointment_id, "document_ids": document_ids,
+               "purpose": purpose}
     a = actions.create_approval(pid, sid, "share_records", payload, {
-        "title": f"Share records with {d.name}", "lines": [x.title for x in docs] + ["Access expires in 7 days"]})
+        "title": f"Share records with {d.name}",
+        "lines": [x.title for x in docs] + [f"Purpose: {purpose}", "Access expires in 7 days - revocable anytime"]})
     return {"ok": True, "approval_id": a.id, "status": "awaiting_patient_consent"}
 
 
@@ -297,14 +314,19 @@ def prepare_doctor_brief(config: RunnableConfig) -> dict:
     cmp = memory.compare(pid)["comparisons"]
     changes = [f"{c['test_name']}: {c['previous']} → {c['latest']} {c['unit']} (lab range {c['reference_range']})"
                for c in cmp if c["direction"] != "same"]
-    meds = [f"{m['name']} {m['strength']} — {m['frequency'] or 'instruction unclear on source'}" for m in actions.medications_view(pid)]
+    mv = actions.medications_view(pid)
+    meds = [f"{m['name']} {m['strength']} - {m['frequency'] or 'instruction unclear on source'}" for m in mv]
+    risen = [c["test_name"].split(" (")[0] for c in cmp if c["direction"] == "up" and c["latest_lab_flag"] != "within lab range"]
+    questions = []
+    if risen:
+        questions.append(f"My {', '.join(risen[:3])} are higher than last time - what should change in my plan?")
+    for m in mv:
+        if m["status"] == "needs_clarification":
+            questions.append(f"The {m['name']} instruction is unclear on my prescription - how should I take it?")
+    questions.append("When should I repeat these tests?")
+    sources = sorted({pt["source"]["title"] for c in cmp for pt in c["points"]} | {m["source"]["title"] for m in mv})
     brief = {"patient": f"{p.name}, {p.age}{p.sex}", "conditions": p.conditions, "allergies": p.allergies,
-             "medications": meds, "changes_since_last_report": changes,
-             "questions": ["My HbA1c and LDL are higher than last time — what should change in my plan?",
-                           "Atorvastatin instruction is unclear on my prescription — how should I take it?",
-                           "When should I repeat these tests?"],
-             "sources": ["Blood test report - 18 Nov 2026", "Blood test report - 09 May 2026",
-                         "Consultation summary - Dr. Meera Rao", "Prescription - Dr. Meera Rao"]}
+             "medications": meds, "changes_since_last_report": changes, "questions": questions, "sources": sources}
     activity(pid, sid, "Prepared doctor briefing", "done", f"{len(changes)} changes · {len(meds)} medicines", "prepare_brief")
     ui(pid, sid, "doctor_brief", brief)
     return {"ok": True, **brief}
@@ -314,21 +336,39 @@ def prepare_doctor_brief(config: RunnableConfig) -> dict:
 def cancel_refill_order(config: RunnableConfig, order_ref: str = "") -> dict:
     """Cancel a sandbox pharmacy refill order (e.g. placed by mistake). Leave order_ref empty for the latest order."""
     pid, sid = _ctx(config)
-    from .db import Approval
+    return actions.cancel_order(pid, sid, order_ref)
+
+
+@tool
+def revoke_record_share(config: RunnableConfig, share_id: str = "") -> dict:
+    """Revoke a doctor's access to records the patient shared. Leave share_id empty for the most recent active share."""
+    pid, sid = _ctx(config)
+    return actions.revoke_share(pid, sid, share_id)
+
+
+@tool
+def get_care_plan(config: RunnableConfig) -> dict:
+    """Clinician-documented follow-up tasks (e.g. repeat tests, review with physician) with their source document,
+    due date and status (open / overdue / booked / done). Use for 'what is pending', 'follow-ups', 'care plan'."""
+    pid, sid = _ctx(config)
+    tasks = care_plan(pid)
+    activity(pid, sid, "Retrieved care plan", "done", f"{len(tasks)} doctor-advised follow-ups", "get_care_plan")
+    ui(pid, sid, "care_plan", {"tasks": tasks})
+    return {"ok": True, "tasks": tasks}
+
+
+def care_plan(pid: str) -> list[dict]:
+    from .db import Reminder
+    now_ = datetime.now(TZ)
     with session() as s:
-        q = select(Approval).where(Approval.patient_id == pid, Approval.action == "refill_order",
-                                   Approval.status == "executed").order_by(Approval.created_at.desc())
-        orders = list(s.scalars(q))
-        a = next((o for o in orders if not order_ref or o.result.get("order_ref") == order_ref), None)
-        if not a:
-            return {"ok": False, "error": "NO_ORDER"}
-        ref = a.result.get("order_ref")
-        a.result = {**a.result, "status": "cancelled"}
-        a.status = "cancelled"
-    activity(pid, sid, "Pharmacy order cancelled", "done", f"{ref} (sandbox)", "cancel_order")
-    return {"ok": True, "order_ref": ref, "status": "cancelled"}
+        out = []
+        for r in s.scalars(select(Reminder).where(Reminder.patient_id == pid, Reminder.kind == "follow_up").order_by(Reminder.due_at)):
+            status = "overdue" if r.status == "open" and r.due_at < now_ else r.status
+            out.append({"task_id": r.id, "title": r.title, "detail": r.body, "due": r.due_at.astimezone(TZ).strftime("%d %b %Y"),
+                        "status": status, "source_document_id": r.ref_id})
+        return out
 
 
-ALL_TOOLS = [cancel_refill_order, get_patient_overview, get_lab_report, compare_lab_history, search_health_records, search_doctors,
+ALL_TOOLS = [cancel_refill_order, revoke_record_share, get_care_plan, get_patient_overview, get_lab_report, compare_lab_history, search_health_records, search_doctors,
              check_slots, propose_appointment, confirm_action, cancel_pending_action, propose_record_share,
              get_medications, propose_medication_reminders, propose_refill, prepare_doctor_brief]

@@ -70,6 +70,8 @@ ACTIONS (human-in-the-loop)
 - Only say something is booked/shared/ordered/scheduled after the tool returns ok with a verified status.
 - After a booking, offer (separately) to share the latest reports with that doctor (propose_record_share)
   and mention calendar reminder was added.
+- Follow-ups / pending care / "kya baaki hai": get_care_plan (doctor-documented tasks with sources).
+- Sharing: include a short purpose; patient can revoke anytime (revoke_record_share).
 - REMINDER vs ORDER: "reminder / yaad dilana / alarm / remind" means propose_medication_reminders. Only call
   propose_refill when the patient explicitly asks to order / buy / refill / mangwana. Never switch one for the other.
 - If reminders are already active, say so (with the times) instead of proposing again.
@@ -109,7 +111,7 @@ async def guard_input(state: State, config) -> dict:
     last = state["messages"][-1]
     text = str(last.content) if isinstance(last, HumanMessage) else ""
     if text and safety.is_emergency(text):
-        activity(pid, sid, "Safety policy: emergency escalation", "failed", "Fixed escalation response; no AI advice",
+        activity(pid, sid, "Safety policy: emergency escalation", "blocked", "Fixed escalation response; no AI advice",
                  "safety_guard")
         emit(pid, sid, "ui", {"component": "emergency", "version": 1, "props": {"call": "112"}})
         rl = config.get("configurable", {}).get("reply_lang", "")
@@ -118,7 +120,7 @@ async def guard_input(state: State, config) -> dict:
     if text and not text.startswith("[App event"):
         key, ms = await nemo_rail.check(text)
         if key:
-            activity(pid, sid, f"NeMo Guardrails input rail: {key.replace('_', ' ')}", "failed",
+            activity(pid, sid, f"NeMo Guardrails input rail: {key.replace('_', ' ')}", "blocked",
                      f"blocked before the LLM · {ms:.0f} ms", "nemo_guardrails")
             rl = config.get("configurable", {}).get("reply_lang", "hinglish")
             return {"emergency": True, "messages": [AIMessage(content=nemo_rail.REPLIES_EN[key] if rl == "english" else nemo_rail.REPLIES[key])]}
@@ -172,7 +174,7 @@ def guard_output(state: State, config) -> dict:
     last = state["messages"][-1]
     ok, rule = safety.check_output(text_of(last.content))
     if not ok:
-        activity(pid, sid, "Safety policy rewrote a response", "failed", "medication-change/diagnosis language blocked",
+        activity(pid, sid, "Safety policy rewrote a response", "blocked", "medication-change/diagnosis language blocked",
                  "output_guard")
         return {"messages": [AIMessage(content=safety.SAFE_REDIRECT, id=last.id)]}
     return {}
@@ -211,6 +213,13 @@ def turn_language(text: str) -> str:
 async def run_turn(patient_id: str, session_id: str, text: str, channel: str = "text",
                    language_hint: str = "Hindi/Hinglish") -> str:
     rl = turn_language(text)
+    try:
+        from .db import Patient, session as _sess
+        with _sess() as _s:
+            pref = ((_s.get(Patient, patient_id).preferences or {}).get("reply_language") or "auto")
+        rl = {"hindi": "devanagari", "english": "english", "hinglish": "hinglish"}.get(pref, rl)
+    except Exception:
+        pass
     # Show the user's words in the right script; runs in parallel with the agent (off the critical path)
     norm_task = asyncio.create_task(transcript.normalize(text)) if transcript.needs_normalization(text) else None
 

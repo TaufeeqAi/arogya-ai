@@ -12,9 +12,11 @@ EMERGENCY_PATTERNS = [
     r"unconscious", r"behosh", r"बेहोश", r"stroke", r"lakwa", r"लकवा", r"face drooping",
     r"suicid", r"khud ?kushi", r"आत्महत्या", r"mar jaana chahti", r"kill myself",
     r"heavy bleeding", r"bahut khoon", r"बहुत खून", r"seizure", r"daura pad", r"daure pad", r"दौरा पड़", r"दौरे पड़",
-    r"overdose", r"zyada goli", r"ज़्यादा गोली", r"([4-9]|\d{2,})\s*(goli|goliyan|goliyaan|tablets|pills)",
-    r"(goli|goliyan|goliyaan|tablets|pills).{0,25}(ek saath|ek sath|at once|together|kha li|kha liye|le li)",
-    r"too many (pills|tablets)", r"zeh(e)?r", r"poison", r"ज़हर", r"गोलियां.{0,20}(खा ली|एक साथ)",
+    r"overdose", r"zyada goli.{0,15}(kha|le) l", r"ज़्यादा गोली.{0,15}(खा|ले) ल",
+    r"(goli|goliyan|goliyaan|tablets?|pills?).{0,25}(ek saath|ek sath|at once|together).{0,20}(kha|le|took|swallow)",
+    r"(kha li|kha liye|le li|le liye|nigal|took|swallowed|have taken|i ate).{0,25}\b([4-9]|\d{2,})\s*(goli|goliyan|goliyaan|tablets?|pills?)",
+    r"\b([4-9]|\d{2,})\s*(goli|goliyan|goliyaan|tablets?|pills?).{0,25}(kha li|kha liye|le li|le liye|nigal|took|swallowed|ek saath kha)",
+    r"too many (pills|tablets)", r"zeh(e)?r (kha|pi)", r"poison(ed)?", r"ज़हर (खा|पी)", r"गोलियां.{0,20}(खा ली|एक साथ खा)",
 ]
 EMERGENCY_REPLY_EN = (
     "This could be an emergency. Please call 112 right now or go to the nearest emergency hospital. "
@@ -22,7 +24,7 @@ EMERGENCY_REPLY_EN = (
 )
 EMERGENCY_REPLY_HI = (
     "Yeh emergency ho sakti hai. Kripya abhi turant 112 par call karein ya sabse nazdeeki emergency hospital jaayein. "
-    "Agar koi aapke paas hai to unhe abhi bulaiye. Main aapke emergency contact ko bhi suchit kar sakti hoon."
+    "Agar koi aapke paas hai to unhe abhi bulaiye."
 )
 EMERGENCY_REPLY_DEV = (
     "यह इमरजेंसी हो सकती है। कृपया अभी तुरंत 112 पर कॉल करें या सबसे नज़दीकी इमरजेंसी अस्पताल जाएँ। "
@@ -97,7 +99,7 @@ AFFIRM_WORDS = {"haan", "han", "haa", "ha", "haanji", "hanji", "ji", "yes", "yea
 AFFIRM_PHRASES = ["kar do", "kar dijiye", "kar dijie", "kar dena", "kar dein", "kar de", "go ahead", "please do",
                   "book it", "book this", "do it", "please book", "कर दो", "कर दीजिए", "कर दें", "कर दे",
                   "गो अहेड", "बुक इट", "बुक दिस", "प्लीज़ बुक", "प्लीज बुक", "डू इट"]
-DENY_WORDS = {"nahi", "nahin", "na", "no", "mat", "cancel", "ruko", "stop", "dont", "don't", "नहीं", "नही", "मत", "रुको",
+DENY_WORDS = {"nahi", "nahin", "no", "wait", "hold", "later", "baad", "mat", "cancel", "ruko", "stop", "dont", "don't", "नहीं", "नही", "मत", "रुको",
               "नो", "डोंट", "कैंसल", "कैन्सल", "स्टॉप", "वेट"}
 
 

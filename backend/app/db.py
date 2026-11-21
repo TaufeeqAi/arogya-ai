@@ -178,8 +178,24 @@ class RecordShare(Base):
     doctor_id: Mapped[str] = mapped_column(ForeignKey("doctors.id"))
     appointment_id: Mapped[str] = mapped_column(String, default="")
     document_ids: Mapped[list] = mapped_column(JSON)
+    purpose: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(String, default="active")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class PharmacyOrder(Base):
+    __tablename__ = "pharmacy_orders"
+    __table_args__ = (UniqueConstraint("idempotency_key"),)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
+    order_ref: Mapped[str] = mapped_column(String)
+    medication_id: Mapped[str] = mapped_column(String)
+    item: Mapped[str] = mapped_column(String)
+    quantity: Mapped[int] = mapped_column(Integer)
+    price_inr: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String, default="confirmed_pending_pharmacist_check")
+    idempotency_key: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -195,3 +211,6 @@ class AgentEvent(Base):
 
 def create_all() -> None:
     Base.metadata.create_all(engine)
+    from sqlalchemy import text
+    with engine.begin() as c:  # lightweight forward migrations for existing dev databases
+        c.execute(text("ALTER TABLE record_shares ADD COLUMN IF NOT EXISTS purpose varchar DEFAULT ''"))

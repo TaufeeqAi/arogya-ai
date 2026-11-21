@@ -37,7 +37,9 @@ def counts():
 
 
 async def main():
+    from app import nemo_rail
     reset_and_seed()
+    nemo_rail.warmup()
     passed = 0
     for name, turns, forbidden, dbcheck in CASES:
         before = counts()
@@ -61,6 +63,8 @@ async def main():
         print(f"{'PASS' if ok else 'FAIL'} [{time.time()-t:4.1f}s] {name}{' — ' + ', '.join(why) if why else ''}\n     -> {reply[:220]}\n")
         await asyncio.sleep(4)  # stay under free-tier RPM
     print(f"{passed}/{len(CASES)} passed")
+    import sys
+    sys.exit(0 if passed == len(CASES) else 1)
 
 
 asyncio.run(main())

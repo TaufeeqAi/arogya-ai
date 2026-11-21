@@ -13,7 +13,7 @@ const TYPE: Record<string, [string, string]> = {
 };
 
 export default function Records() {
-  const { dataVersion, approvals, decide, send, upload, lastExtraction, activity } = useStore();
+  const { dataVersion, approvals, decide, send, upload, lastExtraction, uploadError } = useStore();
   const [uploading, setUploading] = useState('');
   const pick = async () => {
     if (Platform.OS !== 'web') {
@@ -49,6 +49,9 @@ export default function Records() {
   useEffect(() => {
     if (lastExtraction) setUploading('');
   }, [lastExtraction]);
+  useEffect(() => {
+    if (uploadError) setUploading(uploadError);
+  }, [uploadError]);
   const [docs, setDocs] = useState<any[]>([]);
   const [cmp, setCmp] = useState<any>(null);
   const [open, setOpen] = useState<any>(null);
@@ -90,7 +93,7 @@ export default function Records() {
       <Btn title="⬆  Upload a report or prescription" onPress={pick} />
       {uploading ? (
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 10 }}>
-          {uploading.startsWith('Upload failed') ? null : <ActivityIndicator color={C.primary} />}
+          {uploading.startsWith('Upload failed') || uploading === uploadError ? null : <ActivityIndicator color={C.primary} />}
           <Text style={font.small}>{uploading}</Text>
         </View>
       ) : null}

@@ -15,7 +15,7 @@ from sqlalchemy import delete
 from . import storage
 from .config import get_settings
 from .db import (AgentEvent, Approval, Appointment, Base, Doctor, Document, Medication, Observation, Patient,
-                 RecordShare, Reminder, Slot, engine, session)
+                 PharmacyOrder, RecordShare, Reminder, Slot, engine, session)
 
 PATIENT_ID = "demo-patient"
 TZ = ZoneInfo(get_settings().timezone)
@@ -103,7 +103,7 @@ def _lab_doc(s, when: date, lab: str, rows: list[tuple], doc_id: str) -> None:
 def reset_and_seed() -> None:
     Base.metadata.create_all(engine)
     with session() as s:
-        for m in (AgentEvent, RecordShare, Reminder, Appointment, Approval, Slot, Doctor, Medication, Observation,
+        for m in (AgentEvent, PharmacyOrder, RecordShare, Reminder, Appointment, Approval, Slot, Doctor, Medication, Observation,
                   Document, Patient):
             s.execute(delete(m))
 
@@ -159,6 +159,14 @@ def reset_and_seed() -> None:
         s.add(Medication(id="med-atorva", patient_id=PATIENT_ID, document_id="doc-rx-may", name="Atorvastatin",
                          strength="10 mg", frequency=None, times=[], instructions="Frequency not legible on source",
                          duration_days=None, start_date=RX_DATE, supply_left_days=10, status="needs_clarification"))
+
+        # Clinician-documented follow-ups (from the 11 May consultation summary)
+        s.add(Reminder(patient_id=PATIENT_ID, kind="follow_up", ref_id="doc-note-may", title="Repeat HbA1c and lipid profile",
+                       body="Advised by Dr. Meera Rao on 11 May 2026: repeat after 6 months. Done: Apex Diagnostics report, 18 Nov 2026.",
+                       due_at=datetime(2026, 11, 11, 9, 0, tzinfo=TZ), status="done"))
+        s.add(Reminder(patient_id=PATIENT_ID, kind="follow_up", ref_id="doc-note-may", title="Review new reports with physician",
+                       body="Advised by Dr. Meera Rao on 11 May 2026: review with physician with the repeat reports.",
+                       due_at=datetime(2026, 11, 20, 10, 0, tzinfo=TZ), status="open"))
 
         # Doctors + slots (synthetic provider network)
         doctors = [

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { get, getApiBase, post, setApiBase } from '../api';
+import { get, getApiBase, HEADERS, post, setApiBase, url } from '../api';
 import { Btn, Card, Pill, SectionTitle } from '../components/ui';
 import { useStore } from '../store';
 import { C, font } from '../theme';
@@ -11,10 +11,20 @@ export default function Profile() {
   const [p, setP] = useState<any>(null);
   const [h, setH] = useState<any>(null);
   const [msg, setMsg] = useState('');
+  const [shares, setShares] = useState<any[]>([]);
+  const [lang, setLang] = useState('auto');
+  const { dataVersion, sessionId: sid } = useStore();
   useEffect(() => {
-    get('/api/patient').then(setP).catch(() => {});
+    get('/api/patient').then((x) => { setP(x); setLang(x?.preferences?.reply_language || 'auto'); }).catch(() => {});
     get('/api/health').then(setH).catch(() => {});
   }, []);
+  useEffect(() => {
+    get('/api/shares').then(setShares).catch(() => {});
+  }, [dataVersion]);
+  const setLanguage = async (v: string) => {
+    setLang(v);
+    await fetch(url('/api/patient/preferences'), { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ reply_language: v }) }).catch(() => {});
+  };
   const run = async (label: string, fn: () => Promise<any>) => {
     setMsg('…');
     try {
@@ -37,6 +47,34 @@ export default function Profile() {
           <Text style={font.small}>Prefers: {p.preferences.preferred_language} · {p.preferences.preferred_time} slots · {p.preferences.preferred_doctor}</Text>
         </Card>
       )}
+
+      <SectionTitle>Reply language</SectionTitle>
+      <Card style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {[['auto', 'Auto (match me)'], ['hindi', 'हिंदी'], ['hinglish', 'Hinglish'], ['english', 'English']].map(([k, label]) => (
+          <Btn key={k} small kind={lang === k ? 'primary' : 'ghost'} title={label} onPress={() => setLanguage(k)} />
+        ))}
+      </Card>
+
+      <SectionTitle>Shared records</SectionTitle>
+      <Card>
+        {shares.length === 0 && <Text style={font.small}>You have not shared any records.</Text>}
+        {shares.map((x) => (
+          <View key={x.share_id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line, gap: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={font.h3}>{x.doctor_name}</Text>
+              <Pill text={x.status} tone={x.status === 'active' ? 'ok' : 'neutral'} />
+            </View>
+            <Text style={font.small}>{x.documents.join(', ')}</Text>
+            <Text style={font.tiny}>{x.purpose ? `Purpose: ${x.purpose} · ` : ''}{x.status === 'active' ? `expires ${x.label}` : ''}</Text>
+            {x.status === 'active' && (
+              <Btn small kind="ghost" title="Revoke access" onPress={() => run('Access revoked', async () => {
+                await post(`/api/shares/${x.share_id}/revoke`, { session_id: sid });
+                setShares(await get('/api/shares'));
+              })} />
+            )}
+          </View>
+        ))}
+      </Card>
 
       <SectionTitle>Your data, your control</SectionTitle>
       <Card>

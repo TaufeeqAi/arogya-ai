@@ -7,7 +7,7 @@ export type FeedItem =
   | { kind: 'msg'; id: string; role: 'user' | 'assistant'; text: string; channel?: string }
   | { kind: 'ui'; id: string; item: UIItem };
 export type Activity = { id: string; label: string; status: string; detail: string; tool: string; ts: string };
-export type VoiceState = 'idle' | 'connecting' | 'live' | 'error';
+export type VoiceState = 'idle' | 'connecting' | 'live' | 'error' | 'ended';
 
 type Store = {
   sessionId: string;
@@ -23,12 +23,14 @@ type Store = {
   reminder: any | null;
   dismissReminder: () => void;
   send: (text: string) => Promise<void>;
-  decide: (approvalId: string, d: 'approve' | 'reject') => Promise<void>;
+  decide: (approvalId: string, d: 'approve' | 'reject', hash?: string) => Promise<void>;
   startVoice: () => Promise<void>;
   stopVoice: () => Promise<void>;
   clearFeed: () => void;
   dataVersion: number;
   lastExtraction: UIItem | null;
+  uploadError: string;
+  pendingApproval: boolean;
   upload: (file: any, name: string) => Promise<void>;
   reconnectServer: () => void;
 };
@@ -52,6 +54,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [reminder, setReminder] = useState<any | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [lastExtraction, setLastExtraction] = useState<UIItem | null>(null);
+  const [uploadError, setUploadError] = useState('');
   const leaveRef = useRef<null | (() => Promise<void>)>(null);
   const sidRef = useRef('');
 
@@ -93,6 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             setApprovals((a) => ({ ...a, [e.payload.approval_id]: e.payload.status }));
           } else if (e.type === 'document_updated') {
             setDataVersion((v) => v + 1);
+            if (e.payload?.status === 'failed') setUploadError('The document could not be read. Please try again or upload a clearer copy.');
           } else if (e.type === 'reminder') {
             setReminder(e.payload);
             setDataVersion((v) => v + 1);
@@ -114,8 +118,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const decide = useCallback(async (approvalId: string, d: 'approve' | 'reject') => {
-    const r = await post(`/api/approvals/${approvalId}/decide`, { session_id: sidRef.current, decision: d });
+  const decide = useCallback(async (approvalId: string, d: 'approve' | 'reject', hash?: string) => {
+    const r = await post(`/api/approvals/${approvalId}/decide`, { session_id: sidRef.current, decision: d, expected_payload_hash: hash || '' });
     setApprovals((a) => ({ ...a, [approvalId]: r.status }));
   }, []);
 
@@ -127,7 +131,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setMicOpen(false);
       leaveRef.current = await joinVoice(s, {
         onLevels: setLevels,
-        onAgentLeft: () => setLevels({ agent: 0, me: 0 }),
+        onAgentLeft: () => {
+          setLevels({ agent: 0, me: 0 });
+          setVoice('ended');
+          leaveRef.current?.().catch(() => {});
+          leaveRef.current = null;
+        },
+        onState: (st) => {
+          if (/DISCONNECTED/i.test(st) || st === '5') setVoice((v) => (v === 'live' ? 'ended' : v));
+        },
         onMicOpen: () => setMicOpen(true),
       });
       setVoice('live');
@@ -151,7 +163,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       value={{
         sessionId, feed, activity, approvals, thinking, connected, voice, voiceError, levels, micOpen, reminder,
         dismissReminder: () => setReminder(null), send, decide, startVoice, stopVoice,
-        clearFeed: () => setFeed([]), dataVersion, lastExtraction,
+        clearFeed: () => setFeed([]), dataVersion, lastExtraction, uploadError,
+        pendingApproval: Object.values(approvals).includes('pending'),
         reconnectServer: () => setReconnect((n) => n + 1),
         upload: async (file: any, name: string) => {
           const fd = new FormData();
@@ -160,6 +173,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           fd.append('session_id', sidRef.current);
           const r = await fetch(url('/api/documents/upload'), { method: 'POST', body: fd, headers: { 'ngrok-skip-browser-warning': '1' } });
           if (!r.ok) throw new Error(await r.text());
+          setUploadError('');
+          const j = await r.json().catch(() => ({}));
+          if (j?.duplicate) setUploadError('This document is already in your Health Locker.');
           setDataVersion((v) => v + 1);
         },
       }}

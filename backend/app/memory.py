@@ -25,6 +25,7 @@ def obs_dict(o: Observation, doc: Document | None = None) -> dict:
         "ref_high": o.ref_high,
         "lab_flag": {"H": "above lab range", "L": "below lab range"}.get(o.lab_flag, "within lab range"),
         "observed_on": o.observed_on.isoformat(),
+        "validation_status": o.validation_status,
         "source": {"document_id": o.document_id, "title": doc.title if doc else "", "page": o.page,
                    "source_name": doc.source_name if doc else "", "trust_label": doc.trust_label if doc else ""},
     }
@@ -38,13 +39,15 @@ def lab_documents(patient_id: str) -> list[Document]:
                               .order_by(Document.issued_on.desc())))
 
 
-def report_observations(patient_id: str, document_id: str) -> tuple[Document | None, list[dict]]:
+def report_observations(patient_id: str, document_id: str, include_unconfirmed: bool = False) -> tuple[Document | None, list[dict]]:
     with session() as s:
         doc = s.get(Document, document_id)
         if not doc or doc.patient_id != patient_id:
             return None, []
-        rows = s.scalars(select(Observation).where(Observation.patient_id == patient_id,
-                                                   Observation.document_id == document_id))
+        q = select(Observation).where(Observation.patient_id == patient_id, Observation.document_id == document_id)
+        if not include_unconfirmed:
+            q = q.where(Observation.validation_status.in_(("validated", "patient_confirmed")))
+        rows = s.scalars(q)
         return doc, [obs_dict(o, doc) for o in rows]
 
 

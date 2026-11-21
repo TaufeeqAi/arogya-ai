@@ -11,10 +11,12 @@ export default function Care() {
   const [meds, setMeds] = useState<any[]>([]);
   const [appts, setAppts] = useState<any[]>([]);
   const [rem, setRem] = useState<any[]>([]);
+  const [plan, setPlan] = useState<any[]>([]);
   useEffect(() => {
     get('/api/medications').then(setMeds).catch(() => {});
     get('/api/appointments').then(setAppts).catch(() => {});
     get('/api/reminders').then(setRem).catch(() => {});
+    get('/api/care-plan').then(setPlan).catch(() => {});
   }, [dataVersion]);
   const ctx = { say: send, decide, approvals };
   const upcoming = rem.filter((r) => r.status === 'scheduled');
@@ -23,6 +25,8 @@ export default function Care() {
     <ScrollView contentContainerStyle={s.page}>
       <Text style={font.h1}>My Care</Text>
       <Text style={[font.small, { marginBottom: 12 }]}>Appointments, medicines and follow-ups in one place.</Text>
+
+      {plan.length > 0 && <GenUI ctx={ctx} item={{ id: 'plan', component: 'care_plan', version: 1, props: { tasks: plan } }} />}
 
       <SectionTitle>Appointments</SectionTitle>
       {appts.length === 0 && (

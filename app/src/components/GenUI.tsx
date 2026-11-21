@@ -9,7 +9,7 @@ import { Btn, Card, Pill, SourceChip, TrustBadge } from './ui';
 export type UIItem = { id: string; component: string; version: number; props: any };
 export type GenCtx = {
   say: (text: string) => void;
-  decide: (approvalId: string, decision: 'approve' | 'reject') => Promise<void>;
+  decide: (approvalId: string, decision: 'approve' | 'reject', hash?: string) => Promise<void>;
   approvals: Record<string, string>;
 };
 
@@ -119,7 +119,7 @@ function Comparison({ p }: { p: any }) {
               <Text style={[font.body, { fontWeight: '600' }]}>{c.test_name}</Text>
               <Text style={font.small}>
                 {c.previous} → <Text style={{ fontWeight: '800', color: C.ink }}>{c.latest}</Text> {c.unit}{' '}
-                <Text style={{ color: up ? C.danger : down ? C.info : C.muted, fontWeight: '700' }}>
+                <Text style={{ color: C.inkSoft, fontWeight: '700' }}>
                   {up ? '▲' : down ? '▼' : '='} {c.change_pct != null ? `${Math.abs(c.change_pct)}%` : ''}
                 </Text>
               </Text>
@@ -168,7 +168,7 @@ function DoctorSlots({ p, ctx }: { p: any; ctx: GenCtx }) {
           </Pressable>
         ))}
       </View>
-      <Text style={font.tiny}>Live availability from clinic system · tap a slot or just say it</Text>
+      <Text style={font.tiny}>Demo clinic network (simulated) · times in IST · tap a slot or just say it</Text>
     </Card>
   );
 }
@@ -179,7 +179,7 @@ function Approval({ p, ctx }: { p: any; ctx: GenCtx }) {
   const act = async (d: 'approve' | 'reject') => {
     setBusy(true);
     try {
-      await ctx.decide(p.approval_id, d);
+      await ctx.decide(p.approval_id, d, p.payload_hash);
     } finally {
       setBusy(false);
     }
@@ -190,7 +190,7 @@ function Approval({ p, ctx }: { p: any; ctx: GenCtx }) {
       <View style={st.row}>
         <Text style={font.tiny}>NEEDS YOUR APPROVAL</Text>
         <Pill
-          text={{ pending: 'Waiting for you', executed: 'Done ✓', failed: 'Could not complete', rejected: 'Cancelled', expired: 'Expired', approved: 'Approved' }[status] || status}
+          text={{ pending: 'Waiting for you', executed: 'Done ✓', failed: 'Could not complete', rejected: 'Cancelled', expired: 'Expired', approved: 'Approved', unknown: 'Outcome unknown' }[status] || status}
           tone={status === 'executed' ? 'ok' : status === 'pending' ? 'warn' : 'danger'}
         />
       </View>
@@ -208,7 +208,11 @@ function Approval({ p, ctx }: { p: any; ctx: GenCtx }) {
           </View>
         </View>
       )}
-      {status === 'pending' && <Text style={[font.tiny, { marginTop: 8 }]}>Or say "haan, kar do". Bound to these exact details · expires in 10 min</Text>}
+      {status === 'pending' && (
+        <Text style={[font.tiny, { marginTop: 8 }]}>
+          Or say "haan, kar do". Bound to these exact details{p.payload_hash ? ` · ref #${p.payload_hash}` : ''} · expires in 10 min
+        </Text>
+      )}
     </Card>
   );
 }
@@ -218,7 +222,7 @@ function BookingConfirmation({ p }: { p: any }) {
     <Card tone="ok">
       <View style={st.row}>
         <Text style={font.tiny}>APPOINTMENT CONFIRMED</Text>
-        <Pill text="Verified with clinic" tone="ok" />
+        <Pill text="Verified with booking service (demo)" tone="ok" />
       </View>
       <Text style={[font.h2, { marginTop: 4 }]}>{p.doctor_name}</Text>
       <Text style={font.body}>{p.label}</Text>
@@ -235,7 +239,9 @@ function BookingConfirmation({ p }: { p: any }) {
           <Btn small kind="soft" title="⬇ .ics file" onPress={() => Linking.openURL(url(p.ics_url))} />
         </View>
       </View>
-      <Text style={[font.tiny, { marginTop: 8 }]}>Reminders scheduled: 1 day before and 2 hours before</Text>
+      <Text style={[font.tiny, { marginTop: 8 }]}>
+        {p.reminders ? `${p.reminders} reminder${p.reminders > 1 ? 's' : ''} scheduled before the visit` : 'Visit is too soon for advance reminders'}
+      </Text>
     </Card>
   );
 }
@@ -248,7 +254,8 @@ function ShareConfirmation({ p }: { p: any }) {
       {p.documents.map((d: string) => (
         <Text key={d} style={font.body}>📄 {d}</Text>
       ))}
-      <Text style={[font.tiny, { marginTop: 6 }]}>Access expires {fmtDate(p.expires_at)} · revocable anytime</Text>
+      {p.purpose ? <Text style={font.small}>Purpose: {p.purpose}</Text> : null}
+      <Text style={[font.tiny, { marginTop: 6 }]}>Access expires {fmtDate(p.expires_at)} · revoke anytime in Profile</Text>
     </Card>
   );
 }
@@ -264,7 +271,7 @@ function Medication({ p }: { p: any }) {
             <View style={st.row}>
               <Text style={font.h3}>{m.name} {m.strength}</Text>
               <Pill
-                text={unclear ? 'Needs clarification' : m.status === 'reminders_active' ? 'Reminders on' : 'Verified'}
+                text={unclear ? 'Needs clarification' : m.status === 'reminders_active' ? 'Reminders on' : m.source?.trust_label === 'provider_verified' ? 'Doctor verified' : 'From your prescription'}
                 tone={unclear ? 'danger' : m.status === 'reminders_active' ? 'ok' : 'primary'}
               />
             </View>
@@ -329,8 +336,12 @@ function ExtractionReview({ p }: { p: any }) {
   const [state, setState] = useState<'review' | 'saving' | 'confirmed'>('review');
   const confirm = async () => {
     setState('saving');
-    await post(`/api/documents/${p.document_id}/confirm`, {}).catch(() => {});
-    setState('confirmed');
+    try {
+      const r: any = await post(`/api/documents/${p.document_id}/confirm`, {});
+      setState(r?.ok ? 'confirmed' : 'review');
+    } catch {
+      setState('review');
+    }
   };
   return (
     <Card tone={state === 'confirmed' ? 'ok' : 'warn'}>
@@ -382,6 +393,64 @@ function ProviderRecord({ p }: { p: any }) {
   );
 }
 
+function DoctorResults({ p, ctx }: { p: any; ctx: GenCtx }) {
+  return (
+    <Card>
+      <Text style={font.tiny}>DOCTORS · DEMO NETWORK{p.note ? ` · ${p.note.toUpperCase()}` : ''}</Text>
+      {p.doctors.map((d: any) => (
+        <Pressable key={d.id} onPress={() => ctx.say(`${d.name} ke slots dikhao`)} style={({ pressed }) => [st.docRow, pressed && { backgroundColor: C.primarySoft }]}>
+          <View style={st.avatar}>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>{d.name.replace('Dr. ', '').split(' ').map((w: string) => w[0]).join('')}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={font.h3}>{d.name}</Text>
+            <Text style={font.small}>{d.specialty} · {d.clinic}, {d.area}</Text>
+            <Text style={font.tiny}>{d.languages.join(', ')} · ₹{d.fee} · ★ {d.rating}</Text>
+          </View>
+          <Text style={{ color: C.muted, fontSize: 18 }}>›</Text>
+        </Pressable>
+      ))}
+      <Text style={[font.tiny, { marginTop: 6 }]}>Tap a doctor or say their name to see open slots</Text>
+    </Card>
+  );
+}
+
+function CarePlan({ p }: { p: any }) {
+  const tone = (s: string) => (s === 'done' ? 'ok' : s === 'booked' ? 'primary' : s === 'overdue' ? 'danger' : 'warn');
+  return (
+    <Card tone="info">
+      <Text style={font.tiny}>DOCTOR-ADVISED FOLLOW-UPS</Text>
+      {p.tasks.map((t: any) => (
+        <View key={t.task_id} style={st.obs}>
+          <View style={st.row}>
+            <Text style={[font.h3, { flex: 1 }]}>{t.title}</Text>
+            <Pill text={t.status} tone={tone(t.status) as any} />
+          </View>
+          <Text style={font.small}>{t.detail}</Text>
+          <Text style={font.tiny}>Due {t.due}</Text>
+          {t.source_document_id ? <SourceChip documentId={t.source_document_id} title="Source: consultation summary" /> : null}
+        </View>
+      ))}
+    </Card>
+  );
+}
+
+class CardBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed)
+      return (
+        <Card>
+          <Text style={font.small}>This card could not be displayed. The details are in the conversation above.</Text>
+        </Card>
+      );
+    return this.props.children;
+  }
+}
+
 function Emergency() {
   return (
     <Card tone="danger" style={{ backgroundColor: C.dangerSoft }}>
@@ -395,6 +464,14 @@ function Emergency() {
 }
 
 export function GenUI({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
+  return (
+    <CardBoundary>
+      <GenUIInner item={item} ctx={ctx} />
+    </CardBoundary>
+  );
+}
+
+function GenUIInner({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
   const p = item.props;
   try {
     switch (item.component) {
@@ -410,6 +487,8 @@ export function GenUI({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
       case 'emergency': return <Emergency />;
       case 'extraction_review': return <ExtractionReview p={p} />;
       case 'provider_record': return <ProviderRecord p={p} />;
+      case 'doctor_results': return <DoctorResults p={p} ctx={ctx} />;
+      case 'care_plan': return <CarePlan p={p} />;
       default: return null; // unknown component: ignored safely
     }
   } catch {
@@ -425,5 +504,6 @@ const st = StyleSheet.create({
   link: { color: C.primary, fontWeight: '700', fontSize: 13 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 },
+  docRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
   slot: { borderWidth: 1.5, borderColor: C.primary, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center', minWidth: 92 },
 });

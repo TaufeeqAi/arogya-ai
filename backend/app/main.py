@@ -55,6 +55,9 @@ async def lifespan(app: FastAPI):
         seeded = s.get(Patient, PATIENT_ID) is not None
     if not seeded:
         reset_and_seed()
+    with session() as s:
+        for d in s.scalars(select(Document).where(Document.status == "extracting")):
+            d.status = "failed"
     task = asyncio.create_task(reminder_loop())
     from . import nemo_rail
     asyncio.get_running_loop().run_in_executor(None, nemo_rail.warmup)  # local embedding rail, warms in background
@@ -66,6 +69,7 @@ app = FastAPI(title="Aarogya API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 SESSIONS: dict[str, dict] = {}
+TURNS: dict[str, asyncio.Task] = {}
 
 
 def patient_for(session_id: str) -> str:
@@ -157,7 +161,11 @@ async def agora_llm(session_id: str, request: Request):
     pid = patient_for(session_id)
     if not text:
         text = "..."
+    prev = TURNS.get(session_id)
+    if prev and not prev.done():
+        prev.cancel()  # patient interrupted: drop the stale turn instead of letting it finish in the background
     task = asyncio.create_task(run_turn(pid, session_id, text, "voice"))
+    TURNS[session_id] = task
 
     if not body.get("stream", True):
         reply = await task
@@ -183,7 +191,8 @@ async def agora_llm(session_id: str, request: Request):
 
 # ------------------------------------------------------------------ live agent events (SSE)
 @app.get("/api/events")
-async def events(request: Request, patient_id: str = PATIENT_ID):
+async def events(request: Request):
+    patient_id = PATIENT_ID  # server-derived scope (single demo patient); never taken from the client
     r = aioredis.Redis.from_url(S.redis_url, decode_responses=True)
     ps = r.pubsub()
     await ps.subscribe(channel(patient_id))
@@ -211,17 +220,21 @@ async def events(request: Request, patient_id: str = PATIENT_ID):
 class DecideIn(BaseModel):
     session_id: str
     decision: str  # approve | reject
+    expected_payload_hash: str = ""  # hash prefix shown on the card the patient approved
 
 
 @app.post("/api/approvals/{approval_id}/decide")
 def decide(approval_id: str, body: DecideIn):
     pid = patient_for(body.session_id)
+    if body.decision not in ("approve", "reject"):
+        raise HTTPException(422, "decision must be 'approve' or 'reject'")
     if body.decision == "reject":
         actions.reject(pid, body.session_id, approval_id)
         note_external_decision(body.session_id, "Patient rejected the proposal by tapping Cancel.")
         return {"status": "rejected"}
     try:
-        res = actions.execute(pid, body.session_id, approval_id, via="tap on approval card")
+        res = actions.execute(pid, body.session_id, approval_id, via="tap on approval card",
+                              expected_hash=body.expected_payload_hash)
         note_external_decision(body.session_id, f"Patient approved via app; result: {json.dumps(res, default=str)[:600]}")
         return {"status": "executed", "result": res}
     except ActionError as e:
@@ -249,7 +262,7 @@ def list_documents():
 
 @app.get("/api/documents/{doc_id}")
 def get_document(doc_id: str):
-    doc, obs = memory.report_observations(PATIENT_ID, doc_id)
+    doc, obs = memory.report_observations(PATIENT_ID, doc_id, include_unconfirmed=True)
     if not doc:
         with session() as s:
             doc = s.get(Document, doc_id)
@@ -336,7 +349,8 @@ def appointment_ics(appt_id: str):
 @app.get("/api/reminders")
 def reminders():
     with session() as s:
-        rs = s.scalars(select(Reminder).where(Reminder.patient_id == PATIENT_ID).order_by(Reminder.due_at))
+        rs = s.scalars(select(Reminder).where(Reminder.patient_id == PATIENT_ID, Reminder.kind != "follow_up")
+                       .order_by(Reminder.due_at))
         return [{"id": r.id, "kind": r.kind, "title": r.title, "body": r.body, "due_at": r.due_at.isoformat(),
                  "label": fmt_dt(r.due_at), "status": r.status, "recurrence": r.recurrence} for r in rs]
 
@@ -358,6 +372,39 @@ def reminder_action(rid: str, body: ReminderAction):
     emit(PATIENT_ID, "", "activity", {"label": f"Patient reported: {body.action}", "status": "done",
                                       "detail": r.title + " (self-reported)", "tool": "adherence"})
     return {"ok": True}
+
+
+@app.get("/api/shares")
+def shares():
+    return actions.list_shares(PATIENT_ID)
+
+
+@app.post("/api/shares/{share_id}/revoke")
+def revoke(share_id: str, body: ConfirmIn):
+    res = actions.revoke_share(PATIENT_ID, body.session_id, share_id)
+    if not res.get("ok"):
+        raise HTTPException(404, "No active share")
+    return res
+
+
+@app.get("/api/care-plan")
+def care_plan_api():
+    from .tools import care_plan
+    return care_plan(PATIENT_ID)
+
+
+class PrefsIn(BaseModel):
+    reply_language: str = "auto"  # auto | hindi | english | hinglish
+
+
+@app.patch("/api/patient/preferences")
+def set_prefs(body: PrefsIn):
+    if body.reply_language not in ("auto", "hindi", "english", "hinglish"):
+        raise HTTPException(422, "reply_language must be auto, hindi, english or hinglish")
+    with session() as s:
+        p = s.get(Patient, PATIENT_ID)
+        p.preferences = {**(p.preferences or {}), "reply_language": body.reply_language}
+    return {"ok": True, "reply_language": body.reply_language}
 
 
 @app.get("/api/activity")

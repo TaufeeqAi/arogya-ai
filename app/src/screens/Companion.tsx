@@ -12,7 +12,7 @@ const SUGGESTIONS = [
 ];
 
 function Orb() {
-  const { voice, levels, startVoice, stopVoice, thinking, micOpen } = useStore();
+  const { voice, levels, startVoice, stopVoice, thinking, micOpen, pendingApproval } = useStore();
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -28,7 +28,7 @@ function Orb() {
   const listening = voice === 'live' && levels.me > 4;
   const live = voice === 'live';
   const label =
-    voice === 'connecting' ? 'Connecting…' : voice === 'error' ? 'Tap to retry' : !live ? 'Tap to talk' : speaking ? (micOpen ? 'Aarogya is speaking' : 'Aarogya is greeting you… mic opens next') : !micOpen ? 'Connecting voice…' : thinking ? 'Thinking…' : listening ? 'Listening…' : 'Listening — speak naturally';
+    voice === 'connecting' ? 'Connecting…' : voice === 'error' ? 'Tap to retry' : voice === 'ended' ? 'Call ended · tap to talk again' : !live ? 'Tap to talk' : speaking ? (micOpen ? 'Aarogya is speaking' : 'Aarogya is greeting you… mic opens next') : !micOpen ? 'Connecting voice…' : thinking ? 'Thinking…' : pendingApproval ? 'Waiting for your approval — say "haan" or tap Approve' : listening ? 'Listening…' : 'Listening — speak naturally';
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, live ? 1.12 + Math.min(levels.agent, 60) / 200 : 1.04] });
   return (
     <View style={{ alignItems: 'center' }}>
@@ -52,7 +52,7 @@ export function ActivityPanel({ compact }: { compact?: boolean }) {
       {items.length === 0 && <Text style={font.small}>Actions the agent performs will appear here, live.</Text>}
       {items.map((a) => (
         <View key={a.id} style={s.act}>
-          <View style={[s.dot, { backgroundColor: a.status === 'done' ? C.ok : a.status === 'failed' ? C.danger : a.status === 'waiting' ? C.saffron : C.info }]} />
+          <View style={[s.dot, { backgroundColor: { done: C.ok, failed: C.danger, blocked: C.danger, waiting: C.saffron, unknown: C.saffron, cancelled: C.muted }[a.status] || C.info }]} />
           <View style={{ flex: 1 }}>
             <Text style={[font.small, { color: C.ink, fontWeight: '700' }]}>{a.label}</Text>
             {a.detail ? <Text style={font.tiny} numberOfLines={2}>{a.detail}</Text> : null}

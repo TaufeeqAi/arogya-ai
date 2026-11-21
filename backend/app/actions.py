@@ -13,7 +13,8 @@ import redis
 from sqlalchemy import select
 
 from .config import get_settings
-from .db import Appointment, Approval, Doctor, Document, Medication, RecordShare, Reminder, Slot, session
+from .db import (Appointment, Approval, Doctor, Document, Medication, PharmacyOrder, RecordShare, Reminder, Slot,
+                 session)
 from .events import activity, emit, ui
 
 TZ = ZoneInfo(get_settings().timezone)
@@ -39,13 +40,18 @@ def fmt_dt(dt: datetime) -> str:
 def create_approval(patient_id: str, session_id: str, action: str, payload: dict, summary: dict) -> Approval:
     with session() as s:
         # supersede older pending approvals of the same action
+        superseded = []
         for a in s.scalars(select(Approval).where(Approval.patient_id == patient_id, Approval.action == action,
                                                   Approval.status == "pending")):
             a.status = "expired"
+            superseded.append(a.id)
         a = Approval(patient_id=patient_id, session_id=session_id, action=action, payload=payload,
                      payload_hash=_hash(payload), expires_at=datetime.now(timezone.utc) + timedelta(minutes=10))
         s.add(a)
+    for old_id in superseded:
+        emit(patient_id, session_id, "approval_resolved", {"approval_id": old_id, "status": "expired"})
     ui(patient_id, session_id, "approval_card", {"approval_id": a.id, "action": action, "summary": summary,
+                                                  "payload_hash": a.payload_hash[:12],
                                                   "expires_at": a.expires_at.isoformat()})
     activity(patient_id, session_id, "Approval requested", "waiting", summary.get("title", action), "create_approval")
     return a
@@ -82,13 +88,14 @@ def reject(patient_id: str, session_id: str, approval_id: str) -> dict:
         a = s.get(Approval, approval_id)
         if a and a.patient_id == patient_id and a.status == "pending":
             a.status = "rejected"
-    activity(patient_id, session_id, "Action cancelled by patient", "done", "", "reject_approval")
+    activity(patient_id, session_id, "Action cancelled by patient", "cancelled", "", "reject_approval")
     emit(patient_id, session_id, "approval_resolved", {"approval_id": approval_id, "status": "rejected"})
     return {"status": "rejected"}
 
 
-def execute(patient_id: str, session_id: str, approval_id: str, via: str) -> dict:
+def execute(patient_id: str, session_id: str, approval_id: str, via: str, expected_hash: str = "") -> dict:
     """Validate the approval (owner, status, expiry, payload hash) then run the bound action exactly once."""
+    expired = False
     with session() as s:
         a = s.get(Approval, approval_id)
         if not a or a.patient_id != patient_id:
@@ -97,14 +104,18 @@ def execute(patient_id: str, session_id: str, approval_id: str, via: str) -> dic
             return {"status": "already_executed", **a.result}
         if a.status != "pending":
             raise ActionError("APPROVAL_NOT_PENDING", f"Approval is {a.status}")
+        if _hash(a.payload) != a.payload_hash or (expected_hash and not a.payload_hash.startswith(expected_hash)):
+            raise ActionError("APPROVAL_TAMPERED", "Approved details do not match the proposal")
         if a.expires_at < datetime.now(timezone.utc):
-            a.status = "expired"
-            raise ActionError("APPROVAL_EXPIRED", "Approval expired; propose again")
-        if _hash(a.payload) != a.payload_hash:
-            raise ActionError("APPROVAL_TAMPERED", "Payload hash mismatch")
-        a.status = "approved"
-        a.decided_via = via
-        action, payload = a.action, dict(a.payload)
+            a.status = "expired"  # committed when the session block exits
+            expired = True
+        else:
+            a.status = "approved"
+            a.decided_via = via
+            action, payload = a.action, dict(a.payload)
+    if expired:
+        emit(patient_id, session_id, "approval_resolved", {"approval_id": approval_id, "status": "expired"})
+        raise ActionError("APPROVAL_EXPIRED", "Approval expired; propose again")
     activity(patient_id, session_id, "Patient approved", "done", f"via {via}", "validate_approval")
     try:
         fn = {"book_appointment": _book, "share_records": _share, "medication_reminders": _med_reminders,
@@ -113,6 +124,11 @@ def execute(patient_id: str, session_id: str, approval_id: str, via: str) -> dic
         status = "executed"
     except ActionError as e:
         result, status = {"error": e.code, "message": e.message, **e.data}, "failed"
+    except Exception as e:  # unexpected: outcome UNKNOWN until reconciled via the idempotency key; never retried blindly
+        print("ACTION UNKNOWN OUTCOME", action, repr(e)[:200], flush=True)
+        activity(patient_id, session_id, "Outcome unknown - needs reconciliation", "unknown", type(e).__name__, action)
+        result, status = {"error": "UNKNOWN_OUTCOME",
+                          "message": "The result could not be confirmed; nothing will be retried automatically."}, "unknown"
     with session() as s:
         a = s.get(Approval, approval_id)
         a.status, a.result = status, json.loads(json.dumps(result, default=str))
@@ -200,20 +216,28 @@ def _book(patient_id: str, session_id: str, p: dict, approval_id: str) -> dict:
     start = datetime.fromisoformat(p["start"])
     cal = calendar_link(f"Doctor visit: {p['doctor_name']}", start, 30,
                         f"Booking ref {res['booking_ref']}. Carry latest reports. (Aarogya)", f"{p['clinic']}, {p['area']}")
+    n_rem = 0
     with session() as s:
         appt = s.get(Appointment, res["appointment_id"])
         appt.calendar_url = cal
+        for task in s.scalars(select(Reminder).where(Reminder.patient_id == patient_id, Reminder.kind == "follow_up",
+                                                     Reminder.status.in_(("open", "overdue")))):
+            if "review" in task.title.lower():
+                task.status = "booked"
+                task.body = f"{task.body} | Booked: {p['doctor_name']}, {p['label']} (ref {res['booking_ref']})"
         for delta, label in ((timedelta(days=1), "kal"), (timedelta(hours=2), "2 ghante mein")):
             due = start - delta
             if due > datetime.now(timezone.utc):
                 s.add(Reminder(patient_id=patient_id, kind="appointment", ref_id=appt.id,
                                title=f"Appointment {label}: {p['doctor_name']}",
                                body=f"{fmt_dt(start)} at {p['clinic']}. Ref {res['booking_ref']}", due_at=due))
-    activity(patient_id, session_id, "Calendar event + 2 reminders created", "done", "", "create_calendar_event")
+                n_rem += 1
+    activity(patient_id, session_id, f"Calendar link ready - {n_rem} reminders scheduled", "done",
+             "Google Calendar + .ics", "create_calendar_event")
     result = {"booking_ref": res["booking_ref"], "appointment_id": res["appointment_id"], "status": "confirmed",
               "doctor_name": p["doctor_name"], "clinic": p["clinic"], "area": p["area"], "start": p["start"],
               "label": p["label"], "fee": p.get("fee"), "calendar_url": cal,
-              "ics_url": f"/api/appointments/{res['appointment_id']}.ics"}
+              "ics_url": f"/api/appointments/{res['appointment_id']}.ics", "reminders": n_rem}
     ui(patient_id, session_id, "booking_confirmation", result)
     return result
 
@@ -224,12 +248,13 @@ def _share(patient_id: str, session_id: str, p: dict, approval_id: str) -> dict:
         if any(d is None or d.patient_id != patient_id for d in docs):
             raise ActionError("DOCUMENT_SCOPE", "Document not owned by patient")
         sh = RecordShare(patient_id=patient_id, doctor_id=p["doctor_id"], appointment_id=p.get("appointment_id", ""),
-                         document_ids=p["document_ids"], expires_at=datetime.now(timezone.utc) + timedelta(days=7))
+                         document_ids=p["document_ids"], purpose=p.get("purpose", "Upcoming consultation"),
+                         expires_at=datetime.now(timezone.utc) + timedelta(days=7))
         s.add(sh)
     activity(patient_id, session_id, "Records shared with doctor (7-day access)", "done",
              ", ".join(d.title for d in docs), "share_records")
     result = {"share_id": sh.id, "doctor_name": p["doctor_name"], "documents": [d.title for d in docs],
-              "expires_at": sh.expires_at.isoformat()}
+              "purpose": p.get("purpose", "Upcoming consultation"), "expires_at": sh.expires_at.isoformat()}
     ui(patient_id, session_id, "share_confirmation", result)
     return result
 
@@ -260,14 +285,84 @@ def _med_reminders(patient_id: str, session_id: str, p: dict, approval_id: str) 
     return result
 
 
+class SandboxPharmacy:
+    """Stands in for a licensed partner pharmacy API (idempotent order + status lookup). No real sale or payment."""
+
+    @staticmethod
+    def place(patient_id: str, p: dict, idem_key: str) -> dict:
+        with session() as s:
+            ex = s.scalars(select(PharmacyOrder).where(PharmacyOrder.idempotency_key == idem_key)).first()
+            if ex:
+                return {"order_ref": ex.order_ref, "replayed": True}
+            ref = "RX-" + "".join(random.choices(string.digits, k=6))
+            s.add(PharmacyOrder(patient_id=patient_id, order_ref=ref, medication_id=p["medication_id"], item=p["item"],
+                                quantity=p["quantity"], price_inr=p["price_inr"], idempotency_key=idem_key))
+        return {"order_ref": ref, "replayed": False}
+
+    @staticmethod
+    def status(order_ref: str) -> str:
+        with session() as s:
+            o = s.scalars(select(PharmacyOrder).where(PharmacyOrder.order_ref == order_ref)).first()
+            return o.status if o else "not_found"
+
+
 def _refill(patient_id: str, session_id: str, p: dict, approval_id: str) -> dict:
     activity(patient_id, session_id, "Sending order to pharmacy (sandbox)", "running", p["pharmacy"], "place_order")
-    ref = "RX-" + "".join(random.choices(string.digits, k=6))
-    activity(patient_id, session_id, "Pharmacy confirmed order", "done", f"{ref} · pharmacist verification pending",
+    res = SandboxPharmacy.place(patient_id, p, idem_key=f"approval:{approval_id}")
+    st = SandboxPharmacy.status(res["order_ref"])
+    if st == "not_found":
+        raise ActionError("ORDER_UNVERIFIED", "Pharmacy did not confirm the order")
+    activity(patient_id, session_id, "Pharmacy order verified", "done", f"{res['order_ref']} - {st.replace('_', ' ')}",
              "get_order_status")
-    result = {"order_ref": ref, "status": "confirmed_pending_pharmacist_check", **p}
+    result = {"order_ref": res["order_ref"], "status": st, **p}
     ui(patient_id, session_id, "order_confirmation", result)
     return result
+
+
+def cancel_order(patient_id: str, session_id: str, order_ref: str = "") -> dict:
+    with session() as s:
+        q = select(PharmacyOrder).where(PharmacyOrder.patient_id == patient_id, PharmacyOrder.status != "cancelled")
+        if order_ref:
+            q = q.where(PharmacyOrder.order_ref == order_ref)
+        o = s.scalars(q.order_by(PharmacyOrder.created_at.desc())).first()
+        if not o:
+            return {"ok": False, "error": "NO_ORDER"}
+        o.status = "cancelled"
+        ref = o.order_ref
+    activity(patient_id, session_id, "Pharmacy order cancelled", "done", f"{ref} (sandbox)", "cancel_order")
+    return {"ok": True, "order_ref": ref, "status": SandboxPharmacy.status(ref)}
+
+
+def list_shares(patient_id: str) -> list[dict]:
+    now_ = datetime.now(timezone.utc)
+    with session() as s:
+        out = []
+        q = select(RecordShare).where(RecordShare.patient_id == patient_id).order_by(RecordShare.created_at.desc())
+        for sh in s.scalars(q):
+            d = s.get(Doctor, sh.doctor_id)
+            status = "expired" if sh.status == "active" and sh.expires_at < now_ else sh.status
+            titles = [x.title for x in (s.get(Document, i) for i in sh.document_ids) if x]
+            out.append({"share_id": sh.id, "doctor_name": d.name if d else sh.doctor_id, "documents": titles,
+                        "purpose": sh.purpose, "status": status, "expires_at": sh.expires_at.isoformat(),
+                        "label": fmt_dt(sh.expires_at)})
+        return out
+
+
+def revoke_share(patient_id: str, session_id: str, share_id: str = "") -> dict:
+    with session() as s:
+        q = select(RecordShare).where(RecordShare.patient_id == patient_id, RecordShare.status == "active")
+        if share_id:
+            q = q.where(RecordShare.id == share_id)
+        sh = s.scalars(q.order_by(RecordShare.created_at.desc())).first()
+        if not sh:
+            return {"ok": False, "error": "NO_ACTIVE_SHARE"}
+        sh.status = "revoked"
+        d = s.get(Doctor, sh.doctor_id)
+        share_id, name = sh.id, (d.name if d else "")
+    activity(patient_id, session_id, "Record access revoked", "done", f"{name} can no longer view the shared records",
+             "revoke_share")
+    emit(patient_id, session_id, "document_updated", {"share_id": share_id, "status": "revoked"})
+    return {"ok": True, "share_id": share_id, "doctor_name": name, "status": "revoked"}
 
 
 def medications_view(patient_id: str) -> list[dict]:
