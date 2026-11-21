@@ -3,11 +3,13 @@ import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { get } from '../api';
 import { GenUI } from '../components/GenUI';
 import { Btn, Card, Pill, SectionTitle } from '../components/ui';
+import { useNav } from '../nav';
 import { useStore } from '../store';
 import { C, font } from '../theme';
 
 export default function Care() {
   const { dataVersion, approvals, decide, send } = useStore();
+  const { go } = useNav();
   const [meds, setMeds] = useState<any[]>([]);
   const [appts, setAppts] = useState<any[]>([]);
   const [rem, setRem] = useState<any[]>([]);
@@ -25,6 +27,7 @@ export default function Care() {
     <ScrollView contentContainerStyle={s.page}>
       <Text style={font.h1}>My Care</Text>
       <Text style={[font.small, { marginBottom: 12 }]}>Appointments, medicines and follow-ups in one place.</Text>
+      <View style={{ marginBottom: 12 }}><Btn kind="soft" title="🕒  View care timeline" onPress={() => go('timeline')} /></View>
 
       {plan.length > 0 && <GenUI ctx={ctx} item={{ id: 'plan', component: 'care_plan', version: 1, props: { tasks: plan } }} />}
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { GenUI } from '../components/GenUI';
+import { useLayout } from '../nav';
 import { useStore } from '../store';
 import { C, R, font, shadow } from '../theme';
 
@@ -69,8 +70,8 @@ export default function Companion() {
   const [text, setText] = useState('');
   const [showAct, setShowAct] = useState(false);
   const scroll = useRef<any>(null);
-  const { width } = useWindowDimensions();
-  const wide = width >= 980;
+  const { contentWidth } = useLayout();
+  const wide = contentWidth >= 980;
   const ctx = { say: (t: string) => send(t), decide, approvals };
 
   useEffect(() => {

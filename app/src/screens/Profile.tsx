@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { get, getApiBase, HEADERS, post, setApiBase, url } from '../api';
 import { Btn, Card, Pill, SectionTitle } from '../components/ui';
+import { useNav } from '../nav';
 import { useStore } from '../store';
 import { C, font } from '../theme';
 
 export default function Profile() {
   const { clearFeed, reconnectServer, sessionId } = useStore();
+  const { go } = useNav();
   const [server, setServer] = useState(getApiBase());
   const [p, setP] = useState<any>(null);
   const [h, setH] = useState<any>(null);
@@ -47,6 +49,8 @@ export default function Profile() {
           <Text style={font.small}>Prefers: {p.preferences.preferred_language} · {p.preferences.preferred_time} slots · {p.preferences.preferred_doctor}</Text>
         </Card>
       )}
+
+      <Btn kind="soft" title="🔔  Notification preferences" onPress={() => go('notifications')} />
 
       <SectionTitle>Reply language</SectionTitle>
       <Card style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

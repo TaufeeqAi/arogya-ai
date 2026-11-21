@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from . import actions, agora, ingest, memory, provider, storage
+from . import actions, agora, ingest, memory, provider, storage, views
 from .actions import ActionError, fmt_dt
 from .agent import note_external_decision, run_turn
 from .config import get_settings
@@ -33,8 +33,22 @@ async def reminder_loop():
         try:
             now = datetime.now(timezone.utc)
             fired = []
+            prefs_cache: dict[str, dict] = {}
             with session() as s:
                 for r in s.scalars(select(Reminder).where(Reminder.status == "scheduled", Reminder.due_at <= now)):
+                    prefs = prefs_cache.setdefault(r.patient_id, views.notify_prefs(r.patient_id))
+                    if not prefs.get(r.kind, True):
+                        r.status = "muted"  # patient turned this reminder type off
+                        if r.recurrence == "daily":
+                            s.add(Reminder(patient_id=r.patient_id, kind=r.kind, ref_id=r.ref_id, title=r.title,
+                                           body=r.body, recurrence="daily", due_at=r.due_at + timedelta(days=1)))
+                        continue
+                    later = views.quiet_until(prefs, now) if r.kind != "appointment" else None
+                    if later:
+                        r.due_at = later  # quiet hours: deliver when they end
+                        continue
+                    if not prefs.get("show_medicine_names", True) and r.kind == "medication":
+                        r.body = "Time for your medicine"
                     r.status = "sent"
                     fired.append({"reminder_id": r.id, "kind": r.kind, "title": r.title, "body": r.body,
                                   "patient_id": r.patient_id, "due_at": r.due_at.isoformat()})
@@ -405,6 +419,26 @@ def set_prefs(body: PrefsIn):
         p = s.get(Patient, PATIENT_ID)
         p.preferences = {**(p.preferences or {}), "reply_language": body.reply_language}
     return {"ok": True, "reply_language": body.reply_language}
+
+
+@app.get("/api/home")
+def home_api():
+    return views.home(PATIENT_ID)
+
+
+@app.get("/api/timeline")
+def timeline_api():
+    return views.timeline(PATIENT_ID)
+
+
+@app.get("/api/patient/notifications")
+def get_notify():
+    return views.notify_prefs(PATIENT_ID)
+
+
+@app.patch("/api/patient/notifications")
+async def set_notify(request: Request):
+    return views.save_notify_prefs(PATIENT_ID, await request.json())
 
 
 @app.get("/api/activity")

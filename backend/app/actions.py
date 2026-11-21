@@ -225,7 +225,11 @@ def _book(patient_id: str, session_id: str, p: dict, approval_id: str) -> dict:
             if "review" in task.title.lower():
                 task.status = "booked"
                 task.body = f"{task.body} | Booked: {p['doctor_name']}, {p['label']} (ref {res['booking_ref']})"
-        for delta, label in ((timedelta(days=1), "kal"), (timedelta(hours=2), "2 ghante mein")):
+        from .views import notify_prefs
+        leads = notify_prefs(patient_id).get("appointment_lead", ["1d", "2h"])
+        for code, delta, label in (("1d", timedelta(days=1), "kal"), ("2h", timedelta(hours=2), "2 ghante mein")):
+            if code not in leads:
+                continue
             due = start - delta
             if due > datetime.now(timezone.utc):
                 s.add(Reminder(patient_id=patient_id, kind="appointment", ref_id=appt.id,
