@@ -145,3 +145,53 @@ def timeline(patient_id: str) -> list[dict]:
         e["future"] = datetime.fromisoformat(e["ts"]) > now
         e["label"] = datetime.fromisoformat(e["ts"]).astimezone(TZ).strftime("%d %b %Y")
     return sorted(ev, key=lambda e: e["ts"], reverse=True)
+
+
+def health_status(patient_id: str, system: str | None = None) -> dict:
+    """Latest value per test, grouped by body system. 'needs_attention' = latest value outside the lab's printed range
+    (a prompt to discuss with a doctor, not a diagnosis)."""
+    from . import labs
+    from .db import Observation
+    with session() as s:
+        rows = s.execute(select(Observation, Document).join(Document, Document.id == Observation.document_id).where(
+            Observation.patient_id == patient_id,
+            Observation.validation_status.in_(("validated", "patient_confirmed"))).order_by(Observation.observed_on)).all()
+    series: dict[str, list] = {}
+    for o, d in rows:
+        series.setdefault(o.test_code, []).append((o, d))
+    systems = []
+    for key, label, icon, subtitle in labs.SYSTEMS:
+        if system and key != system:
+            continue
+        tests = []
+        for code in labs.ORDER:
+            if labs.system_of(code) != key or code not in series:
+                continue
+            pts = series[code]
+            o, d = pts[-1]
+            prev = pts[-2][0] if len(pts) > 1 and pts[-2][0].unit == o.unit else None
+            status = {"H": "above", "L": "below"}.get(o.lab_flag, "within")
+            tests.append({
+                "code": code, "name": o.test_name, "value": o.value, "unit": o.unit, "reference_range": o.ref_text,
+                "ref_low": o.ref_low, "ref_high": o.ref_high, "status": status, "observed_on": o.observed_on.isoformat(),
+                "previous": prev.value if prev else None,
+                "direction": None if not prev else ("up" if o.value > prev.value else "down" if o.value < prev.value else "same"),
+                "history": [{"date": p.observed_on.isoformat(), "value": p.value, "lab": dd.source_name} for p, dd in pts],
+                "about": labs.explain(code),
+                "source": {"document_id": d.id, "title": d.title, "trust_label": d.trust_label},
+            })
+        out_of_range = [t for t in tests if t["status"] != "within"]
+        systems.append({
+            "key": key, "label": label, "icon": icon, "subtitle": subtitle,
+            "status": "no_data" if not tests else ("needs_attention" if out_of_range else "within_range"),
+            "attention_count": len(out_of_range), "test_count": len(tests),
+            "last_tested": max((t["observed_on"] for t in tests), default=None),
+            "tests": sorted(tests, key=lambda t: t["status"] == "within"),
+        })
+    with session() as s:
+        p = s.get(Patient, patient_id)
+    attention = [x for x in systems if x["status"] == "needs_attention"]
+    report_ids = {d.id for _, d in rows if d.doc_type == "lab_report"}
+    return {"patient": {"name": p.name, "age": p.age, "sex": p.sex}, "report_count": len(report_ids),
+            "overall": "needs_attention" if attention else "within_range",
+            "attention_systems": [x["label"] for x in attention], "systems": systems}

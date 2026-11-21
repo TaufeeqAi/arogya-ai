@@ -320,9 +320,12 @@ def confirm_document(doc_id: str, body: ConfirmIn):
     return ingest.confirm(PATIENT_ID, body.session_id, doc_id)
 
 
+KEY_TESTS = ["HBA1C", "FBS", "LDL", "CHOL", "TG", "HDL", "ALT", "HB", "VITD", "URIC"]
+
+
 @app.get("/api/comparison")
-def comparison():
-    return memory.compare(PATIENT_ID)
+def comparison(all: bool = False):
+    return memory.compare(PATIENT_ID, None if all else KEY_TESTS)
 
 
 @app.get("/api/medications")
@@ -419,6 +422,19 @@ def set_prefs(body: PrefsIn):
         p = s.get(Patient, PATIENT_ID)
         p.preferences = {**(p.preferences or {}), "reply_language": body.reply_language}
     return {"ok": True, "reply_language": body.reply_language}
+
+
+@app.get("/api/health-status")
+def health_status_api():
+    return views.health_status(PATIENT_ID)
+
+
+@app.get("/api/health-status/{system}")
+def health_system_api(system: str):
+    res = views.health_status(PATIENT_ID, system)
+    if not res["systems"]:
+        raise HTTPException(404, "Unknown body system")
+    return res
 
 
 @app.get("/api/home")

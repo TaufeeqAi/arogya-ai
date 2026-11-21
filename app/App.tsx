@@ -7,6 +7,7 @@ import { Btn, Card } from './src/components/ui';
 import { NavProvider, Route, ROUTES, SIDEBAR_W, useLayout } from './src/nav';
 import Care from './src/screens/Care';
 import Companion from './src/screens/Companion';
+import Health from './src/screens/Health';
 import Home from './src/screens/Home';
 import Notifications from './src/screens/Notifications';
 import Profile from './src/screens/Profile';
@@ -115,7 +116,7 @@ function Shell() {
   const { sidebar } = useLayout();
   const { pendingApproval } = useStore();
   const screen = {
-    home: <Home />, talk: <Companion />, records: <Records />, care: <Care />,
+    home: <Home />, health: <Health />, talk: <Companion />, records: <Records />, care: <Care />,
     timeline: <Timeline />, notifications: <Notifications />, profile: <Profile />,
   }[route];
 
@@ -137,17 +138,31 @@ function Shell() {
                   <Text style={font.tiny} numberOfLines={1}>Your health history · your language · your care, connected</Text>
                 </View>
               </View>
-              <StatusChip />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <StatusChip />
+                <Pressable onPress={() => setRoute('profile')} accessibilityRole="button" accessibilityLabel="Profile and settings"
+                  style={[s.headAvatar, route === 'profile' && { borderColor: C.primary }]}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>SS</Text>
+                </Pressable>
+              </View>
             </View>
             <View style={{ flex: 1 }}>{screen}</View>
             <View style={s.tabs}>
               {ROUTES.filter((r) => r.mobile).map((t) => {
-                const on = route === t.key || (t.key === 'profile' && route === 'notifications') || (t.key === 'care' && route === 'timeline');
+                const on = route === t.key || (t.key === 'care' && route === 'timeline');
+                if (t.key === 'talk')
+                  return (
+                    <Pressable key={t.key} onPress={() => setRoute('talk')} style={s.tab} accessibilityRole="tab" accessibilityLabel="Talk to Aarogya" accessibilityState={{ selected: on }}>
+                      <View style={[s.centerBtn, on && { backgroundColor: C.primaryDark }]}>
+                        <Text style={{ fontSize: 24 }}>🎙</Text>
+                        {pendingApproval ? <View style={[s.badge, { position: 'absolute', right: 4, top: 4 }]} /> : null}
+                      </View>
+                    </Pressable>
+                  );
                 return (
                   <Pressable key={t.key} onPress={() => setRoute(t.key)} style={s.tab} accessibilityRole="tab" accessibilityState={{ selected: on }}>
                     <View>
                       <Text style={{ fontSize: 20, opacity: on ? 1 : 0.55 }}>{t.icon}</Text>
-                      {t.key === 'talk' && pendingApproval ? <View style={[s.badge, { position: 'absolute', right: -4, top: -2 }]} /> : null}
                     </View>
                     <Text style={[s.tabLabel, on && { color: C.primary }]}>{t.label}</Text>
                   </Pressable>
@@ -188,5 +203,7 @@ const s = StyleSheet.create({
   navOn: { backgroundColor: C.primarySoft },
   navLabel: { fontSize: 15, fontWeight: '700', color: C.inkSoft, flex: 1 },
   badge: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.saffron },
+  centerBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', marginTop: -26, borderWidth: 4, borderColor: C.bg },
+  headAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
   overlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(22,48,43,0.45)', alignItems: 'center', justifyContent: 'center', padding: 16 },
 });

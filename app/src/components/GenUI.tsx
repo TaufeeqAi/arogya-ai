@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { post, url } from '../api';
 import { C, font } from '../theme';
+import { useNav } from '../nav';
 import { Btn, Card, Pill, SourceChip, TrustBadge } from './ui';
 
 export type UIItem = { id: string; component: string; version: number; props: any };
@@ -435,6 +436,50 @@ function CarePlan({ p }: { p: any }) {
   );
 }
 
+function HealthOverview({ p }: { p: any }) {
+  const { go } = useNav();
+  return (
+    <Card tone={p.overall === 'needs_attention' ? 'warn' : 'ok'}>
+      <Text style={font.tiny}>HEALTH OVERVIEW · BY BODY SYSTEM</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        {p.systems.map((x: any) => (
+          <View key={x.key} style={[st.hchip, x.status === 'needs_attention' ? { backgroundColor: '#FFF1DC', borderColor: C.saffron } : { backgroundColor: '#E2F6EC', borderColor: '#9AD8B6' }]}>
+            <Text>{x.icon}</Text>
+            <Text style={{ fontWeight: '700', color: C.ink, fontSize: 13 }}>{x.label}</Text>
+            {x.status === 'needs_attention' ? <Text style={{ color: '#9A5A16', fontWeight: '800', fontSize: 12 }}>{x.attention_count}</Text> : <Text style={{ color: C.ok }}>✓</Text>}
+          </View>
+        ))}
+      </View>
+      <View style={{ marginTop: 10 }}><Btn small kind="soft" title="Open Health tab" onPress={() => go('health')} /></View>
+      <Text style={[font.tiny, { marginTop: 6 }]}>Numbers = values outside the lab's printed range. Not a diagnosis.</Text>
+    </Card>
+  );
+}
+
+function HealthSystem({ p }: { p: any }) {
+  const { go } = useNav();
+  const out = p.tests.filter((t: any) => t.status !== 'within');
+  return (
+    <Card tone={p.status === 'needs_attention' ? 'warn' : 'ok'}>
+      <View style={st.row}>
+        <Text style={font.tiny}>{p.icon} {p.label.toUpperCase()}</Text>
+        <Pill text={p.status === 'needs_attention' ? `${p.attention_count} outside range` : 'Within lab range'} tone={p.status === 'needs_attention' ? 'warn' : 'ok'} />
+      </View>
+      {(out.length ? out : p.tests.slice(0, 3)).map((t: any) => (
+        <View key={t.code} style={st.obs}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={[font.body, { flex: 1, fontWeight: '600' }]}>{t.name}</Text>
+            <Text style={[font.body, { fontWeight: '800' }]}>{t.value} <Text style={font.small}>{t.unit}</Text></Text>
+          </View>
+          <Text style={font.small}>Lab range {t.reference_range} · {t.history.map((h: any) => h.value).join(' → ')}</Text>
+          <Text style={font.tiny}>{t.about}</Text>
+        </View>
+      ))}
+      <View style={{ marginTop: 8 }}><Btn small kind="soft" title={`See all ${p.test_count} ${p.label.toLowerCase()} tests`} onPress={() => go('health')} /></View>
+    </Card>
+  );
+}
+
 class CardBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
@@ -489,6 +534,8 @@ function GenUIInner({ item, ctx }: { item: UIItem; ctx: GenCtx }) {
       case 'provider_record': return <ProviderRecord p={p} />;
       case 'doctor_results': return <DoctorResults p={p} ctx={ctx} />;
       case 'care_plan': return <CarePlan p={p} />;
+      case 'health_overview': return <HealthOverview p={p} />;
+      case 'health_system': return <HealthSystem p={p} />;
       default: return null; // unknown component: ignored safely
     }
   } catch {
@@ -504,6 +551,7 @@ const st = StyleSheet.create({
   link: { color: C.primary, fontWeight: '700', fontSize: 13 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 },
+  hchip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
   docRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
   slot: { borderWidth: 1.5, borderColor: C.primary, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center', minWidth: 92 },
 });

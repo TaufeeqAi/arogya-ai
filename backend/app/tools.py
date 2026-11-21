@@ -74,10 +74,13 @@ def get_lab_report(config: RunnableConfig, document_id: str = "latest") -> dict:
 @tool
 def compare_lab_history(config: RunnableConfig, test_codes: list[str] | None = None) -> dict:
     """Deterministically compare the latest lab values with the previous report for the same tests.
-    Optional test_codes filter, e.g. ["HBA1C","LDL"]. Known codes: HBA1C, FBS, CHOL, LDL, HDL, TG, CREAT, HB,
-    VITD, TSH. Returns numeric change only (no clinical interpretation) and shows a comparison chart."""
+    Optional test_codes filter, e.g. ["HBA1C","LDL"] or a whole system's codes. Codes: sugar HBA1C FBS PPBS;
+    heart CHOL LDL HDL TG VLDL; liver TBIL DBIL AST ALT ALP GGT ALB; kidney CREAT UREA URIC EGFR; blood HB WBC PLT
+    RBC MCV; thyroid TSH FT4 FT3; nutrition VITD B12 FERR CA; infection CRP ESR. Without codes: key tests.
+    Returns numeric change only (no clinical interpretation) and shows a comparison chart."""
     pid, sid = _ctx(config)
-    res = memory.compare(pid, [c.upper() for c in test_codes] if test_codes else None)
+    default = ["HBA1C", "FBS", "LDL", "CHOL", "TG", "HDL", "ALT", "HB", "VITD", "URIC"]
+    res = memory.compare(pid, [c.upper() for c in test_codes] if test_codes else default)
     n = len(res["comparisons"])
     activity(pid, sid, "Compared with previous report", "done",
              f"{n} matching tests · {len(res['not_comparable'])} not comparable", "compare_lab_observations")
@@ -311,7 +314,7 @@ def prepare_doctor_brief(config: RunnableConfig) -> dict:
     pid, sid = _ctx(config)
     with session() as s:
         p = s.get(Patient, pid)
-    cmp = memory.compare(pid)["comparisons"]
+    cmp = [c for c in memory.compare(pid)["comparisons"] if c["latest_lab_flag"] != "within lab range" or c["test_code"] in ("HBA1C", "LDL")]
     changes = [f"{c['test_name']}: {c['previous']} → {c['latest']} {c['unit']} (lab range {c['reference_range']})"
                for c in cmp if c["direction"] != "same"]
     mv = actions.medications_view(pid)
@@ -337,6 +340,33 @@ def cancel_refill_order(config: RunnableConfig, order_ref: str = "") -> dict:
     """Cancel a sandbox pharmacy refill order (e.g. placed by mistake). Leave order_ref empty for the latest order."""
     pid, sid = _ctx(config)
     return actions.cancel_order(pid, sid, order_ref)
+
+
+@tool
+def get_health_status(config: RunnableConfig, system: str = "") -> dict:
+    """Health overview by body system (sugar, heart, liver, kidney, blood, hormones, nutrition, infection):
+    which systems have latest values OUTSIDE the lab's printed range, each test's value, range, trend and a
+    plain-language description of what the test measures. Use for 'what needs attention', 'how is my liver',
+    'which reports should I discuss with my doctor', or explaining an unfamiliar test. Not a diagnosis."""
+    pid, sid = _ctx(config)
+    from . import views
+    res = views.health_status(pid, system or None)
+    att = res["attention_systems"]
+    activity(pid, sid, "Reviewed health status by body system", "done",
+             f"{len(att)} area(s) with values outside lab range" + (f": {', '.join(att)}" if att else ""), "get_health_status")
+    if system and res["systems"]:
+        ui(pid, sid, "health_system", res["systems"][0])
+    else:
+        ui(pid, sid, "health_overview", {"overall": res["overall"], "systems": [
+            {k: x[k] for k in ("key", "label", "icon", "status", "attention_count", "test_count")} for x in res["systems"]]})
+    slim = [{"system": x["label"], "status": x["status"],
+             "outside_lab_range": [f"{t['name']}: {t['value']} {t['unit']} (lab range {t['reference_range']}, "
+                                   f"{t['status']}; previous {t['previous']})" for t in x["tests"] if t["status"] != "within"],
+             **({"tests": [{k: t[k] for k in ("name", "value", "unit", "reference_range", "status", "previous", "about")}
+                           for t in x["tests"]]} if system else {})}
+            for x in res["systems"]]
+    return {"ok": True, "overall": res["overall"], "systems": slim,
+            "note": "Status compares the latest value with the lab's printed range only; it is not a diagnosis."}
 
 
 @tool
@@ -369,6 +399,6 @@ def care_plan(pid: str) -> list[dict]:
         return out
 
 
-ALL_TOOLS = [cancel_refill_order, revoke_record_share, get_care_plan, get_patient_overview, get_lab_report, compare_lab_history, search_health_records, search_doctors,
+ALL_TOOLS = [get_health_status, cancel_refill_order, revoke_record_share, get_care_plan, get_patient_overview, get_lab_report, compare_lab_history, search_health_records, search_doctors,
              check_slots, propose_appointment, confirm_action, cancel_pending_action, propose_record_share,
              get_medications, propose_medication_reminders, propose_refill, prepare_doctor_brief]

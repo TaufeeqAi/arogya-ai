@@ -167,6 +167,17 @@ export default function Home() {
             ))}
           </Card>
 
+          <Pressable onPress={() => go('health')}>
+            <Card tone="warn" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontSize: 22 }}>🫀</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={font.h3}>Health status by body system</Text>
+                <Text style={font.small}>Sugar, heart, liver, kidney, blood, thyroid, nutrition — see what needs attention</Text>
+              </View>
+              <Text style={{ color: C.muted, fontSize: 20 }}>›</Text>
+            </Card>
+          </Pressable>
+
           <Pressable onPress={() => go('timeline')}>
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Text style={{ fontSize: 22 }}>🕒</Text>

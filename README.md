@@ -51,7 +51,7 @@ thing that decides and acts, so no two LLMs make competing decisions.
 
 1. **"Meri latest blood report samjhao."** → report card with values outside the lab range, source PDF linked.
 2. **"Pichhli report se compare karo."** → deterministic chart: HbA1c 7.2 → 8.1, Vitamin D/TSH marked *not comparable*.
-3. *(Health Locker)* **Upload** `docs/demo/Metro_Path_Labs_Report_12Nov2025.pdf` → AI extraction → confirm → trend becomes 1 year: 6.9 → 7.2 → 8.1.
+3. *(Health Locker)* **Upload** `docs/demo/Metro_Path_Labs_Thyroid_Vitamin_14Feb2026.pdf` (different lab) → AI extraction → confirm → thyroid/vitamin trends gain a data point.
 4. **"Saturday morning doctor ka appointment chahiye."** → live slots → **"Pehla wala"** → approval card (nothing booked yet).
 5. *(Profile → Simulate slot conflict)* **"Haan, book kar do."** → slot taken → nothing booked → alternatives → **"11 baje wala, haan"** → booked, verified ref, calendar + 2 reminders.
 6. **"Report doctor ke saath share kar do"** → separate consent → shared for 7 days.

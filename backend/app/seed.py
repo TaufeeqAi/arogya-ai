@@ -74,30 +74,60 @@ def _pdf(title: str, header_lines: list[str], table_rows: list[list[str]] | None
     return buf.getvalue()
 
 
-def _lab_doc(s, when: date, lab: str, rows: list[tuple], doc_id: str) -> None:
+def _lab_doc(s, report_id: str, rep: dict, trust: str = "provider_verified", source_type: str = "provider_import") -> None:
+    from . import labs
+    when = date(*rep["date"])
+    lab = rep["lab"]
     header = [f"Patient: Sunita Sharma | Age/Sex: 56/F | Patient ID: SYN-0042",
               f"Collected: {when.strftime('%d %b %Y')} | Laboratory: {lab}, Bengaluru",
               "Referred by: Dr. Meera Rao"]
     table = [["Test", "Result", "Unit", "Reference range", "Flag"]]
     text_lines = [f"Laboratory report from {lab} dated {when.isoformat()}."]
-    for code, name, unit, lo, hi, ref, val in rows:
-        f = _flag(val, lo, hi)
+    current = None
+    for code in labs.ORDER:
+        if code not in rep["values"]:
+            continue
+        name, unit, lo, hi, ref, system, _ = labs.CATALOG[code]
+        if system != current:
+            current = system
+            table.append([dict((k, t) for k, t, *_ in labs.SYSTEMS).get(system, system).upper(), "", "", "", ""])
+        val = rep["values"][code]
+        f = labs.flag(code, val)
         table.append([name, str(val), unit, ref, f])
         text_lines.append(f"{name}: {val} {unit} (reference {ref}) {f}")
     notes = ["Flags (H/L) are printed by the laboratory against its reference range. Clinical correlation by the "
              "treating physician is advised."]
     pdf = _pdf(f"{lab} - Laboratory Report", header, table, notes)
-    key = f"{PATIENT_ID}/{doc_id}.pdf"
+    key = f"{PATIENT_ID}/{report_id}.pdf"
     sha = storage.put(key, pdf)
-    s.add(Document(id=doc_id, patient_id=PATIENT_ID, title=f"Blood test report - {when.strftime('%d %b %Y')}",
-                   doc_type="lab_report", source_type="provider_import", source_name=lab, issued_on=when,
-                   storage_key=key, sha256=sha, status="processed", trust_label="provider_verified",
+    s.add(Document(id=report_id, patient_id=PATIENT_ID, title=f"Blood test report - {when.strftime('%d %b %Y')}",
+                   doc_type="lab_report", source_type=source_type, source_name=lab, issued_on=when,
+                   storage_key=key, sha256=sha, status="processed", trust_label=trust,
                    text="\n".join(text_lines)))
     s.flush()
-    for code, name, unit, lo, hi, ref, val in rows:
-        s.add(Observation(patient_id=PATIENT_ID, document_id=doc_id, test_code=code, test_name=name, value=val,
-                          unit=unit, ref_low=lo, ref_high=hi, ref_text=ref, lab_flag=_flag(val, lo, hi),
-                          observed_on=when, page=1))
+    for code, val in rep["values"].items():
+        name, unit, lo, hi, ref, *_ = labs.CATALOG[code]
+        s.add(Observation(patient_id=PATIENT_ID, document_id=report_id, test_code=code, test_name=name, value=val,
+                          unit=unit, ref_low=lo, ref_high=hi, ref_text=ref, lab_flag=labs.flag(code, val),
+                          observed_on=when, page=1,
+                          validation_status="validated" if trust == "provider_verified" else "patient_confirmed"))
+
+
+def write_upload_demo_pdf(path: str) -> None:
+    """The thyroid/vitamin panel used for the live upload demo (not seeded)."""
+    from . import labs
+    rep = labs.UPLOAD_DEMO
+    when = date(*rep["date"])
+    table = [["Test", "Result", "Unit", "Reference range", "Flag"]]
+    for code in labs.ORDER:
+        if code in rep["values"]:
+            name, unit, lo, hi, ref, *_ = labs.CATALOG[code]
+            table.append([name, str(rep["values"][code]), unit, ref, labs.flag(code, rep["values"][code])])
+    pdf = _pdf(f"{rep['lab']} - Test Report",
+               ["Patient: Sunita Sharma | Age/Sex: 56/F | Lab No: MPL-81904",
+                f"Sample collected: {when.strftime('%d %b %Y')} | {rep['lab']}, Indiranagar, Bengaluru", "Ref. by: Self"],
+               table, ["Results relate only to the sample tested. Flags indicate values outside the biological reference interval."])
+    open(path, "wb").write(pdf)
 
 
 def reset_and_seed() -> None:
@@ -115,9 +145,12 @@ def reset_and_seed() -> None:
                                    "preferred_doctor": "Dr. Meera Rao", "max_travel_km": 8}))
         s.flush()
 
-        _lab_doc(s, MAY_REPORT, "Apex Diagnostics", [t[:7] for t in TESTS] + ONLY_MAY, "doc-lab-may")
-        _lab_doc(s, NOV_REPORT, "Apex Diagnostics",
-                 [(c, n, u, lo, hi, r, nov) for c, n, u, lo, hi, r, _may, nov in TESTS] + ONLY_NOV, "doc-lab-nov")
+        from . import labs
+        for rid, rep in labs.REPORTS.items():
+            if rid == "doc-lab-aug":  # a quick sugar check the patient uploaded and confirmed
+                _lab_doc(s, rid, rep, trust="patient_confirmed", source_type="patient_upload")
+            else:
+                _lab_doc(s, rid, rep)
 
         # Consultation note (narrative -> semantic memory)
         note = [
