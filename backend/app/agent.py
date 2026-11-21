@@ -70,6 +70,9 @@ ACTIONS (human-in-the-loop)
 - Only say something is booked/shared/ordered/scheduled after the tool returns ok with a verified status.
 - After a booking, offer (separately) to share the latest reports with that doctor (propose_record_share)
   and mention calendar reminder was added.
+- REMINDER vs ORDER: "reminder / yaad dilana / alarm / remind" means propose_medication_reminders. Only call
+  propose_refill when the patient explicitly asks to order / buy / refill / mangwana. Never switch one for the other.
+- If reminders are already active, say so (with the times) instead of proposing again.
 - Medicine reminders/refills: get_medications first. Never create reminders for an instruction marked
   needs_clarification; explain it is unclear on the prescription and suggest confirming with the doctor.
 """
@@ -211,8 +214,17 @@ async def run_turn(patient_id: str, session_id: str, text: str, channel: str = "
     # Show the user's words in the right script; runs in parallel with the agent (off the critical path)
     norm_task = asyncio.create_task(transcript.normalize(text)) if transcript.needs_normalization(text) else None
 
+    print(f"USER {session_id} [{channel}/{rl}]: {text}", flush=True)
+
     async def _emit_user():
-        shown = await norm_task if norm_task else text
+        shown = text
+        if norm_task:
+            done, _ = await asyncio.wait({norm_task}, timeout=2.5)  # never cancels; falls back to raw ASR text
+            if done:
+                try:
+                    shown = norm_task.result() or text
+                except Exception:
+                    shown = text
         emit(patient_id, session_id, "transcript", {"role": "user", "text": shown, "channel": channel,
                                                     "asr_raw": text if shown != text else None})
     user_emit = asyncio.create_task(_emit_user())
@@ -227,10 +239,8 @@ async def run_turn(patient_id: str, session_id: str, text: str, channel: str = "
         activity(patient_id, session_id, "Agent error", "failed", type(e).__name__, "agent")
         print("AGENT ERROR", repr(e))
         reply = "Maaf kijiye, abhi mujhe thodi dikkat aa rahi hai. Kya aap ek baar phir bol sakti hain?"
-    try:
-        await asyncio.wait_for(user_emit, timeout=4)  # keep user line before assistant line in the UI
-    except Exception:
-        pass
+    await asyncio.wait({user_emit}, timeout=3)  # keep the user line before the assistant line (never cancels)
+    print(f"AAROGYA {session_id}: {reply[:200]}", flush=True)
     emit(patient_id, session_id, "transcript", {"role": "assistant", "text": reply, "channel": channel})
     return reply
 

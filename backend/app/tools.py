@@ -249,6 +249,9 @@ def propose_medication_reminders(config: RunnableConfig, medication_id: str) -> 
         m = s.get(Medication, medication_id)
         if not m or m.patient_id != pid:
             return {"ok": False, "error": "NOT_FOUND"}
+        if m.status == "reminders_active":
+            return {"ok": True, "status": "already_active", "medication": f"{m.name} {m.strength}", "times": m.times,
+                    "message": "Daily reminders are already active for this medicine; nothing to change."}
         if m.status == "needs_clarification" or not m.times:
             activity(pid, sid, "Blocked: prescription instruction incomplete", "failed", f"{m.name} {m.strength}",
                      "validate_medication")
@@ -307,6 +310,25 @@ def prepare_doctor_brief(config: RunnableConfig) -> dict:
     return {"ok": True, **brief}
 
 
-ALL_TOOLS = [get_patient_overview, get_lab_report, compare_lab_history, search_health_records, search_doctors,
+@tool
+def cancel_refill_order(config: RunnableConfig, order_ref: str = "") -> dict:
+    """Cancel a sandbox pharmacy refill order (e.g. placed by mistake). Leave order_ref empty for the latest order."""
+    pid, sid = _ctx(config)
+    from .db import Approval
+    with session() as s:
+        q = select(Approval).where(Approval.patient_id == pid, Approval.action == "refill_order",
+                                   Approval.status == "executed").order_by(Approval.created_at.desc())
+        orders = list(s.scalars(q))
+        a = next((o for o in orders if not order_ref or o.result.get("order_ref") == order_ref), None)
+        if not a:
+            return {"ok": False, "error": "NO_ORDER"}
+        ref = a.result.get("order_ref")
+        a.result = {**a.result, "status": "cancelled"}
+        a.status = "cancelled"
+    activity(pid, sid, "Pharmacy order cancelled", "done", f"{ref} (sandbox)", "cancel_order")
+    return {"ok": True, "order_ref": ref, "status": "cancelled"}
+
+
+ALL_TOOLS = [cancel_refill_order, get_patient_overview, get_lab_report, compare_lab_history, search_health_records, search_doctors,
              check_slots, propose_appointment, confirm_action, cancel_pending_action, propose_record_share,
              get_medications, propose_medication_reminders, propose_refill, prepare_doctor_brief]
